@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Musik Quiz</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="app-title">Musik Quiz</div>
+      <nav class="app-nav">
+        <button class="nav-btn active" data-view="library">Library</button>
+        <button class="nav-btn" data-view="quiz-setup">Quiz</button>
+      </nav>
+    </header>
+
+    <!-- Library View -->
+    <section id="view-library" class="view active">
+      <div class="search-section">
+        <div class="search-bar">
+          <input type="text" id="search-input" placeholder="Search songs or artists…" autocomplete="off" spellcheck="false" />
+          <button id="search-btn" class="btn-primary">Search</button>
+        </div>
+        <div id="search-loading" class="loading-msg" style="display:none">Searching…</div>
+        <div id="search-error" class="error-msg" style="display:none"></div>
+        <div id="search-results" class="song-grid"></div>
+      </div>
+
+      <div class="library-section">
+        <div class="library-header">
+          <h2>My Library <span id="library-count" class="badge">0</span></h2>
+          <div class="library-actions">
+            <button id="import-btn" class="btn-ghost btn-sm">Import playlist</button>
+            <button id="clear-library-btn" class="btn-ghost btn-sm">Clear all</button>
+          </div>
+        </div>
+        <div id="library-songs" class="song-list"></div>
+        <div id="library-empty" class="empty-state">
+          <div class="empty-icon">♫</div>
+          <p>Search for songs above and add them to your library.</p>
+          <p class="hint">You need at least 4 songs to start a quiz.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quiz Setup View -->
+    <section id="view-quiz-setup" class="view">
+      <div class="setup-card">
+        <h2>Quiz Settings</h2>
+
+        <div class="setting-group">
+          <label class="setting-label">Number of questions</label>
+          <div class="number-picker">
+            <button class="picker-btn" id="q-minus">−</button>
+            <span id="q-count">10</span>
+            <button class="picker-btn" id="q-plus">+</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Question types</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" name="qtype" value="title" checked>
+              <span>Song title</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="qtype" value="artist" checked>
+              <span>Artist</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="qtype" value="year" checked>
+              <span>Release year</span>
+            </label>
+          </div>
+        </div>
+
+        <p id="library-status" class="hint"></p>
+        <div id="setup-error" class="error-msg" style="display:none"></div>
+        <button id="start-quiz-btn" class="btn-primary btn-lg">Start Quiz</button>
+      </div>
+    </section>
+
+    <!-- Active Quiz View -->
+    <section id="view-quiz-active" class="view">
+      <div class="quiz-header">
+        <span id="quiz-progress" class="quiz-progress">1 / 10</span>
+        <span id="quiz-score" class="quiz-score-display">0 pts</span>
+      </div>
+
+      <div class="quiz-card">
+        <canvas id="visualizer" class="visualizer"></canvas>
+
+        <div class="player-row">
+          <button id="play-btn" class="play-btn" title="Play / Pause">
+            <span id="play-icon">▶</span>
+          </button>
+          <div class="progress-track" id="progress-track">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <span id="timer-display" class="timer">0:30</span>
+        </div>
+
+        <div id="question-text" class="question-text"></div>
+
+        <div class="answer-area">
+          <input type="text" id="answer-input" class="answer-input" placeholder="Type your answer…" autocomplete="off" spellcheck="false">
+          <button id="submit-answer-btn" class="btn-primary">Check</button>
+        </div>
+        <div id="answer-feedback" class="answer-feedback" style="display:none"></div>
+
+        <button id="next-btn" class="btn-primary btn-lg next-btn" style="display:none">Next →</button>
+      </div>
+    </section>
+
+    <!-- Results View -->
+    <section id="view-results" class="view">
+      <div class="results-card">
+        <div id="results-emoji" class="results-emoji"></div>
+        <h2 id="results-title">Quiz Complete!</h2>
+        <div id="results-score" class="results-score-big"></div>
+        <div id="results-breakdown" class="results-breakdown"></div>
+        <div class="results-actions">
+          <button id="retry-btn" class="btn-primary btn-lg">Play Again</button>
+          <button id="back-library-btn" class="btn-ghost btn-lg">Edit Library</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="import-modal" class="modal-overlay" style="display:none" aria-modal="true" role="dialog">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Import Playlist</h3>
+        <button id="modal-close" class="modal-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="import-tabs">
+        <button class="import-tab active" data-tab="paste">Paste list</button>
+        <button class="import-tab" data-tab="file">Apple Music file</button>
+      </div>
+
+      <!-- Paste tab -->
+      <div id="import-tab-paste" class="import-tab-content active">
+        <p class="import-hint">One song per line. Formats accepted:</p>
+        <ul class="import-formats">
+          <li><code>Artist - Title</code></li>
+          <li><code>Title</code> (just the song name)</li>
+        </ul>
+        <textarea id="paste-input" placeholder="Kendrick Lamar - HUMBLE.&#10;The Weeknd - Blinding Lights&#10;Taylor Swift - Anti-Hero" rows="8" spellcheck="false"></textarea>
+      </div>
+
+      <!-- File tab -->
+      <div id="import-tab-file" class="import-tab-content">
+        <p class="import-hint">Export your playlist from the Music app:</p>
+        <ol class="import-formats">
+          <li>Select the playlist in Music.app</li>
+          <li>File → Export Playlist…</li>
+          <li>Save as <strong>.txt</strong> (tab-separated), then upload below</li>
+        </ol>
+        <label class="file-drop" id="file-drop">
+          <input type="file" id="file-input" accept=".txt,.tsv,.csv" style="display:none">
+          <span id="file-label">Choose file or drag &amp; drop</span>
+        </label>
+      </div>
+
+      <div id="import-progress" style="display:none">
+        <div class="import-progress-bar">
+          <div id="import-progress-fill" class="import-progress-fill"></div>
+        </div>
+        <p id="import-status" class="import-status-text"></p>
+      </div>
+
+      <div id="import-result" class="import-result" style="display:none"></div>
+
+      <div class="modal-footer">
+        <button id="import-cancel-btn" class="btn-ghost">Cancel</button>
+        <button id="import-run-btn" class="btn-primary">Import</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="preview-audio" preload="none"></audio>
+  <script src="app.js"></script>
+</body>
+</html>
