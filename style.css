@@ -359,9 +359,15 @@ body {
 
 .mastery-overview {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.mastery-row {
+  display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  min-height: 0;
 }
 
 .mastery-pill {
@@ -370,6 +376,29 @@ body {
   padding: 3px 9px;
   border-radius: 99px;
 }
+
+.mastery-pill-field {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.mastery-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.mastery-dot-field {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mastery-field-unheard { background: rgba(255, 255, 255, 0.15); }
+.mastery-field-wrong   { background: #e55; }
+.mastery-field-known   { background: #1dce96; }
 
 .mastery-pill-unheard { background: rgba(85,85,112,0.25);  color: var(--text-3); }
 .mastery-pill-s0      { background: rgba(255,69,58,0.15);  color: #ff453a; }

@@ -137,6 +137,34 @@ function getMasteryStats() {
   return counts;
 }
 
+function getFieldMastery(id) {
+  const key = String(id);
+  const s = songStats[key];
+  const result = {};
+  for (const type of ['title', 'artist', 'year']) {
+    const st = s && s[type];
+    if (!st || st.a === 0) result[type] = 'unheard';
+    else if (st.c >= 1 && st.c / st.a >= 0.5) result[type] = 'known';
+    else result[type] = 'wrong';
+  }
+  return result;
+}
+
+function getFieldAccuracyStats() {
+  const total = state.library.length;
+  if (!total) return { title: null, artist: null, year: null };
+  const result = {};
+  for (const type of ['title', 'artist', 'year']) {
+    let known = 0;
+    for (const song of state.library) {
+      const st = songStats[String(song.id)]?.[type];
+      if (st && st.a > 0 && st.c >= 1 && st.c / st.a >= 0.5) known++;
+    }
+    result[type] = Math.round((known / total) * 100);
+  }
+  return result;
+}
+
 // ── Persistence ───────────────────────────────────────────────────────────
 
 function loadLibrary() {
@@ -370,7 +398,9 @@ function renderLibrary() {
   }
   empty.style.display = 'none';
   list.innerHTML = state.library.map((song) => {
-    const mastery = getMastery(song.id);
+    const fm = getFieldMastery(song.id);
+    const mark = s => s === 'known' ? '✓' : s === 'wrong' ? '✗' : '○';
+    const tooltip = `Title ${mark(fm.title)}  Artist ${mark(fm.artist)}  Year ${mark(fm.year)}`;
     return `
     <div class="song-row">
       <img src="${song.artwork}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
@@ -378,7 +408,11 @@ function renderLibrary() {
         <div class="song-row-title">${esc(song.title)}</div>
         <div class="song-row-sub">${esc(song.artist)} · ${song.year}</div>
       </div>
-      <span class="mastery-dot mastery-${mastery}" title="${MASTERY_LABEL[mastery] || mastery}"></span>
+      <span class="mastery-dots" title="${tooltip}">
+        <span class="mastery-dot-field mastery-field-${fm.title}"></span>
+        <span class="mastery-dot-field mastery-field-${fm.artist}"></span>
+        <span class="mastery-dot-field mastery-field-${fm.year}"></span>
+      </span>
       <button class="remove-btn" data-id="${song.id}" title="Remove">×</button>
     </div>`;
   }).join('');
@@ -393,7 +427,7 @@ function renderMasteryOverview() {
   if (!el) return;
   if (!state.library.length) { el.innerHTML = ''; return; }
   const counts = getMasteryStats();
-  el.innerHTML = [
+  const songPills = [
     ['s3', '★'],
     ['s2', '◑'],
     ['s1', '◔'],
@@ -405,6 +439,15 @@ function renderMasteryOverview() {
       `<span class="mastery-pill mastery-pill-${level}">${icon} ${counts[level]} ${MASTERY_LABEL[level]}</span>`
     )
     .join('');
+
+  const fas = getFieldAccuracyStats();
+  const fieldPills = [['title', 'T'], ['artist', 'A'], ['year', 'Y']]
+    .map(([type, label]) =>
+      `<span class="mastery-pill mastery-pill-field">${label} ${fas[type] !== null ? fas[type] + '%' : '--'}</span>`
+    )
+    .join('');
+
+  el.innerHTML = `<div class="mastery-row">${songPills}</div><div class="mastery-row">${fieldPills}</div>`;
 }
 
 function updateLibraryStatus() {
