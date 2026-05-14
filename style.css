@@ -530,6 +530,37 @@ body {
   text-align: right;
 }
 
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 68px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
 .question-text {
   font-size: 16px;
   font-weight: 600;

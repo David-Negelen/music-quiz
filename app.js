@@ -19,21 +19,25 @@ let progressInterval = null;
 // Web Audio visualizer
 let audioCtx = null;
 let analyser = null;
+let gainNode = null;
 let mediaSource = null;
 let animFrameId = null;
+let currentVolume = 1;
 
+// Must be called synchronously inside a user-gesture handler so the
+// AudioContext is created/resumed while the activation is still live.
 function ensureAudioGraph() {
-  if (audioCtx) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    return;
-  }
+  if (audioCtx) return;
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.8;
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = 1;
     mediaSource = audioCtx.createMediaElementSource(audio);
-    mediaSource.connect(analyser);
+    mediaSource.connect(gainNode);
+    gainNode.connect(analyser);
     analyser.connect(audioCtx.destination);
   } catch (e) {}
 }
@@ -238,22 +242,16 @@ function buildStudySession() {
   const { count, types } = state.quizConfig;
   if (!types.length) return null;
 
-  // Sort songs: new & learning first (prioritise weakest), mastered last
-  // Within same mastery level: lowest accuracy first
-  const getAcc = id => {
-    const s = songStats[String(id)];
-    if (!s) return -1;
-    let ta = 0, tc = 0;
-    for (const t of types) { const x = s[t] || { a: 0, c: 0 }; ta += x.a; tc += x.c; }
-    return ta ? tc / ta : -1;
-  };
-
-  const sorted = [...state.library].sort((a, b) => {
-    const ma = MASTERY_ORDER[getMastery(a.id)];
-    const mb = MASTERY_ORDER[getMastery(b.id)];
-    if (ma !== mb) return ma - mb;
-    return getAcc(a.id) - getAcc(b.id);
-  });
+  // Group songs by mastery level, shuffle within each group so the order
+  // isn't predictable, but weaker songs still come before stronger ones.
+  const groups = { new: [], learning: [], familiar: [], mastered: [] };
+  state.library.forEach(s => groups[getMastery(s.id)].push(s));
+  const sorted = [
+    ...shuffle(groups.new),
+    ...shuffle(groups.learning),
+    ...shuffle(groups.familiar),
+    ...shuffle(groups.mastered),
+  ];
 
   const limit = (count === null || count >= state.library.length) ? state.library.length : count;
   const songs = sorted.slice(0, limit);
@@ -280,13 +278,12 @@ function stopAudio() {
 function startAudio(url) {
   stopAudio();
   audio.src = url;
+  audio.volume = currentVolume;
 
   const playBtn = document.getElementById('play-btn');
   const playIcon = document.getElementById('play-icon');
   const progressFill = document.getElementById('progress-fill');
   const timerDisplay = document.getElementById('timer-display');
-
-  timerSeconds = 30;
 
   function updateProgress() {
     if (!audio.duration) return;
@@ -300,26 +297,31 @@ function startAudio(url) {
 
   progressInterval = setInterval(updateProgress, 250);
 
-  audio.addEventListener('play', () => { playIcon.textContent = '⏸'; }, { once: false });
-  audio.addEventListener('pause', () => { playIcon.textContent = '▶'; }, { once: false });
-  audio.addEventListener('ended', () => {
+  // Use property assignment so each new song replaces the previous handler
+  audio.onplay = () => { playIcon.textContent = '⏸'; };
+  audio.onpause = () => { playIcon.textContent = '▶'; };
+  audio.onended = () => {
     playIcon.textContent = '▶';
     progressFill.style.width = '100%';
     timerDisplay.textContent = '0:00';
-  });
-
-  playBtn.onclick = () => {
-    ensureAudioGraph();
-    if (audio.paused) audio.play().catch(() => {});
-    else audio.pause();
   };
 
-  ensureAudioGraph();
+  // resume() returns an already-resolved Promise when the context is running,
+  // so .then() fires in the current microtask and stays within the user-gesture
+  // activation window on Chrome/Firefox/Safari desktop.
+  playBtn.onclick = () => {
+    ensureAudioGraph();
+    if (!audio.paused) { audio.pause(); return; }
+    const p = audioCtx ? audioCtx.resume() : Promise.resolve();
+    p.then(() => audio.play().catch(() => {}));
+  };
+
   startVisualizer();
 
-  audio.play().catch(() => {
-    playIcon.textContent = '▶';
-  });
+  // Autoplay — callers (startSession / next-btn / retry-btn) call
+  // ensureAudioGraph() first, so audioCtx is already created and running.
+  const p = audioCtx ? audioCtx.resume() : Promise.resolve();
+  p.then(() => audio.play().catch(() => { playIcon.textContent = '▶'; }));
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────
@@ -775,6 +777,7 @@ function startSession() {
   const studyAll = studyAllCheckbox ? studyAllCheckbox.checked : true;
   const count = studyAll ? null : parseInt(document.getElementById('q-count').textContent, 10);
 
+  ensureAudioGraph(); // must happen synchronously inside this click handler
   state.quizConfig = { count, types };
 
   // Snapshot mastery before session so results can show improvements
@@ -918,14 +921,27 @@ function init() {
     if (qCount < 200) { qCount++; updateCountDisplay(); }
   });
 
+  // Volume slider
+  const volumeSlider = document.getElementById('volume-slider');
+  if (volumeSlider) {
+    volumeSlider.addEventListener('input', () => {
+      currentVolume = parseFloat(volumeSlider.value);
+      audio.volume = currentVolume;
+    });
+  }
+
   // Start session
   document.getElementById('start-quiz-btn').addEventListener('click', startSession);
 
   // Next question
-  document.getElementById('next-btn').addEventListener('click', advanceQuiz);
+  document.getElementById('next-btn').addEventListener('click', () => {
+    ensureAudioGraph();
+    advanceQuiz();
+  });
 
   // Results actions
   document.getElementById('retry-btn').addEventListener('click', () => {
+    ensureAudioGraph();
     state.preMastery = {};
     state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
     state.quizQuestions = buildStudySession();

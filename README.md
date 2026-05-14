@@ -6,16 +6,17 @@ A browser-based music learning app. Listen to 30-second previews from iTunes and
 
 No build step needed. Serve the folder over HTTP — the Web Audio API and iTunes search both require `http://`, not `file://`.
 
-**Python (built-in):**
+**With auto-reload on file save (recommended for development):**
+```sh
+npm run dev
+```
+Opens http://localhost:8080 and reloads automatically whenever you save a file.
+
+**Plain Python server (no auto-reload):**
 ```sh
 python3 -m http.server 8080
 ```
 Then open [http://localhost:8080](http://localhost:8080).
-
-**Node (if you have npx):**
-```sh
-npx serve .
-```
 
 ## How it works
 
