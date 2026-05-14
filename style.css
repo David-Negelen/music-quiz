@@ -1,16 +1,16 @@
 :root {
-  --bg: #0d0d14;
-  --surface: #17172a;
-  --surface-2: #1f1f38;
-  --surface-3: #272745;
-  --accent: #fc3c44;
-  --accent-hover: #e8353d;
-  --success: #30d158;
-  --error: #ff453a;
+  --bg: #0f1117;
+  --surface: #161a24;
+  --surface-2: #1c2030;
+  --surface-3: #232840;
+  --accent: #ff5252;
+  --accent-hover: #e64a4a;
+  --success: #1dce96;
+  --error: #ff5252;
   --text: #f0f0fa;
   --text-2: #8888aa;
   --text-3: #555570;
-  --border: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.08);
   --radius: 12px;
   --radius-lg: 18px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
@@ -46,18 +46,15 @@ body {
   top: 0;
   background: var(--bg);
   z-index: 10;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
   margin-bottom: 24px;
 }
 
 .app-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-  background: linear-gradient(135deg, var(--accent), #ff8a8a);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  color: var(--accent);
 }
 
 .app-nav {
@@ -72,7 +69,7 @@ body {
   background: none;
   border: none;
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   padding: 6px 16px;
   border-radius: 7px;
@@ -100,7 +97,7 @@ body {
   color: white;
   border: none;
   border-radius: var(--radius);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   padding: 10px 20px;
   cursor: pointer;
@@ -114,9 +111,9 @@ body {
 .btn-ghost {
   background: none;
   color: var(--text-2);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   padding: 8px 16px;
   cursor: pointer;
@@ -125,8 +122,8 @@ body {
 
 .btn-ghost:hover { color: var(--text); border-color: var(--text-3); }
 
-.btn-sm { padding: 5px 12px; font-size: 13px; }
-.btn-lg { width: 100%; padding: 14px; font-size: 16px; border-radius: var(--radius-lg); }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-lg { width: 100%; padding: 13px; font-size: 14px; border-radius: var(--radius-lg); }
 
 /* ── Search ──────────────────────────────────────────────────────────────── */
 
@@ -140,21 +137,21 @@ body {
 
 .search-bar input {
   flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 15px;
+  font-size: 14px;
   padding: 10px 14px;
   outline: none;
   transition: border-color 0.15s;
 }
 
 .search-bar input::placeholder { color: var(--text-3); }
-.search-bar input:focus { border-color: var(--accent); }
+.search-bar input:focus { border-color: rgba(255, 82, 82, 0.5); }
 
 .loading-msg, .error-msg {
-  font-size: 14px;
+  font-size: 13px;
   padding: 8px 0;
   color: var(--text-2);
 }
@@ -175,7 +172,7 @@ body {
 
 .song-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius);
   display: flex;
   align-items: center;
@@ -252,7 +249,7 @@ body {
 .library-actions { display: flex; gap: 6px; }
 
 .library-header h2 {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -262,7 +259,7 @@ body {
 .badge {
   background: var(--accent);
   color: white;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 99px;
@@ -274,7 +271,7 @@ body {
 
 .song-row {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius);
   display: flex;
   align-items: center;
@@ -357,7 +354,7 @@ body {
 .mastery-pill-s0      { background: rgba(255,69,58,0.15);  color: #ff453a; }
 .mastery-pill-s1      { background: rgba(255,159,10,0.15); color: #ff9f0a; }
 .mastery-pill-s2      { background: rgba(255,214,10,0.15); color: #ffd60a; }
-.mastery-pill-s3      { background: rgba(48,209,88,0.12);  color: var(--success); }
+.mastery-pill-s3      { background: rgba(29,206,150,0.12); color: var(--success); }
 
 .mastery-summary {
   font-size: 13px;
@@ -379,13 +376,13 @@ body {
 
 .empty-state p { margin-bottom: 6px; }
 
-.hint { font-size: 13px; color: var(--text-3); margin-top: 8px; }
+.hint { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 
 /* ── Quiz Setup ──────────────────────────────────────────────────────────── */
 
 .setup-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 28px 24px;
   display: flex;
@@ -395,18 +392,18 @@ body {
   margin: 0 auto;
 }
 
-.setup-card h2 { font-size: 20px; font-weight: 700; }
+.setup-card h2 { font-size: 18px; font-weight: 700; }
 
 .setting-group { display: flex; flex-direction: column; gap: 10px; }
 
-.setting-label { font-size: 14px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; }
+.setting-label { font-size: 12px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; }
 
 .number-picker {
   display: flex;
   align-items: center;
   gap: 0;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
   width: fit-content;
@@ -429,7 +426,7 @@ body {
 .picker-btn:hover { background: var(--surface-3); }
 
 #q-count {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   min-width: 40px;
   text-align: center;
@@ -442,7 +439,7 @@ body {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -460,21 +457,46 @@ body {
   align-items: center;
   margin-bottom: 16px;
   padding: 0 4px;
+  gap: 12px;
 }
 
-.quiz-progress { font-size: 14px; color: var(--text-2); font-weight: 500; }
-.quiz-score-display { font-size: 15px; font-weight: 700; color: var(--accent); }
+.quiz-progress-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.quiz-progress { font-size: 12px; color: var(--text-2); font-weight: 500; white-space: nowrap; }
+
+.quiz-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.quiz-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.quiz-score-display { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; }
 
 .quiz-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
 }
 
 .visualizer {
   width: 100%;
-  height: 160px;
+  height: 180px;
   display: block;
   background: var(--surface-2);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -485,7 +507,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .play-btn {
@@ -525,7 +547,7 @@ body {
 }
 
 .timer {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
   min-width: 30px;
@@ -567,33 +589,43 @@ body {
   padding: 14px 16px 4px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .answer-field-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-2);
+  color: rgba(255, 255, 255, 0.35);
   width: 44px;
   flex-shrink: 0;
+  padding-top: 10px;
 }
 
 .field-result {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   width: 20px;
   text-align: center;
   flex-shrink: 0;
+  padding-top: 10px;
 }
 
 .field-result.correct { color: var(--success); }
 .field-result.wrong   { color: var(--error); }
+
+.field-hint {
+  font-size: 11px;
+  color: #f5a623;
+  margin-top: 4px;
+  min-height: 0;
+  line-height: 1.4;
+}
 
 .quiz-card-footer {
   padding: 12px 16px 16px;
@@ -613,7 +645,7 @@ body {
   left: 0;
   right: 0;
   background: var(--surface-2);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 0.5px solid rgba(255,255,255,0.12);
   border-radius: var(--radius);
   max-height: 240px;
   overflow-y: auto;
@@ -637,34 +669,44 @@ body {
   background: var(--surface-3);
 }
 
-.ac-main { font-size: 14px; font-weight: 500; }
-.ac-sub { font-size: 12px; color: var(--text-2); }
+.ac-main { font-size: 13px; font-weight: 500; }
+.ac-sub { font-size: 11px; color: var(--text-2); }
 
 
 .answer-input {
   width: 100%;
-  background: var(--surface-2);
-  border: 1.5px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 16px;
+  font-size: 14px;
   font-family: inherit;
-  padding: 12px 14px;
+  padding: 9px 12px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.answer-input:focus { border-color: var(--accent); }
-.answer-input:disabled { opacity: 0.6; }
-.answer-input.correct { border-color: var(--success); }
-.answer-input.wrong   { border-color: var(--error); }
+.answer-input:focus { border-color: rgba(255, 82, 82, 0.5); }
+.answer-input:disabled { opacity: 0.7; }
+.answer-input.correct {
+  border-color: rgba(29, 206, 150, 0.5);
+  background: rgba(29, 206, 150, 0.05);
+}
+.answer-input.wrong {
+  border-color: rgba(255, 82, 82, 0.5);
+  background: rgba(255, 82, 82, 0.05);
+}
 
+.next-btn {
+  border-radius: 999px !important;
+  letter-spacing: 0.3px;
+}
 
 /* ── Results ─────────────────────────────────────────────────────────────── */
 
 .results-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 36px 24px;
   text-align: center;
@@ -678,7 +720,7 @@ body {
 
 .results-emoji { font-size: 56px; }
 
-.results-card h2 { font-size: 22px; font-weight: 700; }
+.results-card h2 { font-size: 20px; font-weight: 700; }
 
 .results-score-big {
   font-size: 44px;
@@ -701,8 +743,8 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 10px 14px;
-  font-size: 14px;
-  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  border-bottom: 0.5px solid var(--border);
 }
 
 .breakdown-row:last-child { border-bottom: none; }
@@ -746,7 +788,7 @@ body {
 
 .modal {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 500px;
@@ -764,7 +806,7 @@ body {
   padding: 20px 20px 0;
 }
 
-.modal-header h3 { font-size: 18px; font-weight: 700; }
+.modal-header h3 { font-size: 16px; font-weight: 700; }
 
 .modal-close {
   background: none;
@@ -783,14 +825,14 @@ body {
   display: flex;
   gap: 4px;
   padding: 16px 20px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .import-tab {
   background: none;
   border: none;
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   padding: 8px 14px;
   cursor: pointer;
@@ -806,13 +848,13 @@ body {
 .import-tab-content.active { display: block; }
 
 .import-hint {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-2);
   margin-bottom: 8px;
 }
 
 .import-formats {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-2);
   padding-left: 18px;
   margin-bottom: 12px;
@@ -824,17 +866,17 @@ body {
   padding: 1px 5px;
   border-radius: 4px;
   font-family: 'SF Mono', 'Menlo', monospace;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
 }
 
 #paste-input {
   width: 100%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   font-family: inherit;
   padding: 10px 12px;
   resize: vertical;
@@ -845,11 +887,11 @@ body {
 }
 
 #paste-input::placeholder { color: var(--text-3); }
-#paste-input:focus { border-color: var(--accent); }
+#paste-input:focus { border-color: rgba(255, 82, 82, 0.5); }
 
 
 .import-progress-bar {
-  height: 4px;
+  height: 3px;
   background: var(--surface-3);
   border-radius: 2px;
   overflow: hidden;
@@ -865,7 +907,7 @@ body {
 }
 
 .import-status-text {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-2);
   padding: 0 20px 12px;
 }
@@ -874,19 +916,19 @@ body {
   margin: 0 20px 16px;
   padding: 12px 14px;
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.6;
 }
 
 .import-result.success {
-  background: rgba(48, 209, 88, 0.1);
-  border: 1px solid rgba(48, 209, 88, 0.25);
+  background: rgba(29, 206, 150, 0.08);
+  border: 0.5px solid rgba(29, 206, 150, 0.25);
   color: var(--success);
 }
 
 .import-result.partial {
-  background: rgba(255, 159, 10, 0.1);
-  border: 1px solid rgba(255, 159, 10, 0.25);
+  background: rgba(255, 159, 10, 0.08);
+  border: 0.5px solid rgba(255, 159, 10, 0.25);
   color: #ff9f0a;
 }
 
@@ -895,21 +937,21 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1.5px dashed var(--border);
+  border: 0.5px dashed var(--border);
   border-radius: var(--radius);
   padding: 32px 16px;
   cursor: pointer;
   transition: all 0.15s;
   text-align: center;
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 13px;
   gap: 8px;
   margin-top: 8px;
 }
 
 .file-drop:hover, .file-drop.drag-over {
   border-color: var(--accent);
-  background: rgba(252, 60, 68, 0.05);
+  background: rgba(255, 82, 82, 0.05);
   color: var(--text);
 }
 
@@ -919,6 +961,6 @@ body {
   gap: 8px;
   padding: 0 20px 20px;
   justify-content: flex-end;
-  border-top: 1px solid var(--border);
+  border-top: 0.5px solid var(--border);
   padding-top: 16px;
 }

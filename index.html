@@ -74,7 +74,10 @@
     <!-- Active Quiz View -->
     <section id="view-quiz-active" class="view">
       <div class="quiz-header">
-        <span id="quiz-progress" class="quiz-progress">1 / 10</span>
+        <div class="quiz-progress-group">
+          <span id="quiz-progress" class="quiz-progress">1 / 10</span>
+          <div class="quiz-progress-bar"><div id="quiz-progress-fill" class="quiz-progress-fill"></div></div>
+        </div>
         <span id="quiz-score" class="quiz-score-display">0 pts</span>
       </div>
 
@@ -98,6 +101,7 @@
             <div class="answer-wrap">
               <input type="text" id="answer-title" class="answer-input" placeholder="Song title…" autocomplete="off" spellcheck="false">
               <ul id="dropdown-title" class="answer-dropdown" style="display:none"></ul>
+              <div class="field-hint" id="hint-title"></div>
             </div>
             <span class="field-result" id="result-title"></span>
           </div>
@@ -106,6 +110,7 @@
             <div class="answer-wrap">
               <input type="text" id="answer-artist" class="answer-input" placeholder="Artist name…" autocomplete="off" spellcheck="false">
               <ul id="dropdown-artist" class="answer-dropdown" style="display:none"></ul>
+              <div class="field-hint" id="hint-artist"></div>
             </div>
             <span class="field-result" id="result-artist"></span>
           </div>
@@ -114,6 +119,7 @@
             <div class="answer-wrap">
               <input type="text" id="answer-year" class="answer-input" placeholder="Year…" autocomplete="off" spellcheck="false">
               <ul id="dropdown-year" class="answer-dropdown" style="display:none"></ul>
+              <div class="field-hint" id="hint-year"></div>
             </div>
             <span class="field-result" id="result-year"></span>
           </div>

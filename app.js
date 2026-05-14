@@ -50,15 +50,20 @@ function startVisualizer() {
     if (audio.paused) return;
 
     t += 0.035;
+    const playhead = (audio.duration && !isNaN(audio.duration)) ? audio.currentTime / audio.duration : 0;
     for (let i = 0; i < N; i++) {
       const v = Math.max(0.04,
         (Math.sin(t * freq[i] + phase[i]) * 0.35 + 0.55) *
         (Math.sin(t * freq[i] * 0.45 + phase[i] * 1.3) * 0.2 + 0.8)
       );
       const halfH = Math.max(2 * dpr, v * H * 0.44);
-      ctx2d.fillStyle = `rgba(252, 60, 68, ${0.2 + v * 0.8})`;
+      ctx2d.fillStyle = (i / N < playhead) ? '#ff5252' : 'rgba(255,82,82,0.28)';
       ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
     }
+    // Playhead vertical line
+    const px = playhead * W;
+    ctx2d.fillStyle = '#ff5252';
+    ctx2d.fillRect(px - dpr, 0, 2 * dpr, H);
   }
 
   draw();
@@ -472,6 +477,8 @@ function renderQuestion() {
   const total = state.quizQuestions.length;
 
   document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
+  const progressFillEl = document.getElementById('quiz-progress-fill');
+  if (progressFillEl) progressFillEl.style.width = `${((state.quizIndex + 1) / total) * 100}%`;
   document.getElementById('quiz-score').textContent = `${state.quizScore} pts`;
   document.getElementById('next-btn').style.display = 'none';
   const submitBtn = document.getElementById('submit-answer-btn');
@@ -490,6 +497,8 @@ function renderQuestion() {
     dd.innerHTML = '';
     resultEl.textContent = '';
     resultEl.className = 'field-result';
+    const hintEl = document.getElementById(`hint-${type}`);
+    if (hintEl) hintEl.textContent = '';
 
     input.oninput = () => {
       if (state.quizQuestions[state.quizIndex].submitted) return;
@@ -564,15 +573,18 @@ function handleAnswer() {
     const input = document.getElementById(`answer-${type}`);
     const resultEl = document.getElementById(`result-${type}`);
     input.disabled = true;
+    const hintEl = document.getElementById(`hint-${type}`);
     if (correct[type]) {
+      input.value = answers[type];
       input.className = 'answer-input correct';
       resultEl.textContent = '✓';
       resultEl.className = 'field-result correct';
+      if (hintEl) hintEl.textContent = '';
     } else {
       input.className = 'answer-input wrong';
-      input.value = answers[type];
       resultEl.textContent = '✗';
       resultEl.className = 'field-result wrong';
+      if (hintEl) hintEl.textContent = answers[type];
     }
   }
 
