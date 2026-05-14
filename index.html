@@ -63,24 +63,6 @@
           </div>
         </div>
 
-        <div class="setting-group">
-          <label class="setting-label">Question types</label>
-          <div class="checkbox-group">
-            <label class="checkbox-label">
-              <input type="checkbox" name="qtype" value="title" checked>
-              <span>Song title</span>
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" name="qtype" value="artist" checked>
-              <span>Artist</span>
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" name="qtype" value="year" checked>
-              <span>Release year</span>
-            </label>
-          </div>
-        </div>
-
         <div id="mastery-overview" class="mastery-overview"></div>
 
         <p id="library-status" class="hint"></p>
@@ -110,16 +92,37 @@
           <input type="range" id="volume-slider" class="volume-slider" min="0" max="1" step="0.02" value="1" title="Volume">
         </div>
 
-        <div id="question-text" class="question-text"></div>
-
-        <div class="answer-area">
-          <input type="text" id="answer-input" class="answer-input" placeholder="Type your answer…" list="answer-suggestions" autocomplete="off" spellcheck="false">
-          <datalist id="answer-suggestions"></datalist>
-          <button id="submit-answer-btn" class="btn-primary">Check</button>
+        <div class="answer-fields">
+          <div class="answer-field-row">
+            <span class="field-label">Title</span>
+            <div class="answer-wrap">
+              <input type="text" id="answer-title" class="answer-input" placeholder="Song title…" autocomplete="off" spellcheck="false">
+              <ul id="dropdown-title" class="answer-dropdown" style="display:none"></ul>
+            </div>
+            <span class="field-result" id="result-title"></span>
+          </div>
+          <div class="answer-field-row">
+            <span class="field-label">Artist</span>
+            <div class="answer-wrap">
+              <input type="text" id="answer-artist" class="answer-input" placeholder="Artist name…" autocomplete="off" spellcheck="false">
+              <ul id="dropdown-artist" class="answer-dropdown" style="display:none"></ul>
+            </div>
+            <span class="field-result" id="result-artist"></span>
+          </div>
+          <div class="answer-field-row">
+            <span class="field-label">Year</span>
+            <div class="answer-wrap">
+              <input type="text" id="answer-year" class="answer-input" placeholder="Year…" autocomplete="off" spellcheck="false">
+              <ul id="dropdown-year" class="answer-dropdown" style="display:none"></ul>
+            </div>
+            <span class="field-result" id="result-year"></span>
+          </div>
         </div>
-        <div id="answer-feedback" class="answer-feedback" style="display:none"></div>
 
-        <button id="next-btn" class="btn-primary btn-lg next-btn" style="display:none">Next →</button>
+        <div class="quiz-card-footer">
+          <button id="submit-answer-btn" class="btn-primary btn-lg">Check</button>
+          <button id="next-btn" class="btn-primary btn-lg next-btn" style="display:none">Next →</button>
+        </div>
       </div>
     </section>
 

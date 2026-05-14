@@ -7,7 +7,7 @@ const state = {
   quizIndex: 0,
   quizScore: 0,
   quizAnswers: [],
-  quizConfig: { count: null, types: ['title', 'artist', 'year'] }, // count null = all
+  quizConfig: { count: null },
   preMastery: {}, // mastery snapshot taken before each session
 };
 
@@ -31,7 +31,6 @@ function startVisualizer() {
 
   const ctx2d = canvas.getContext('2d');
   const N = 72;
-  // Per-bar random frequencies give each bar its own speed so it looks organic
   const freq = Array.from({ length: N }, () => 0.6 + Math.random() * 0.8);
   const phase = Array.from({ length: N }, () => Math.random() * Math.PI * 2);
   let t = 0;
@@ -45,7 +44,6 @@ function startVisualizer() {
 
     ctx2d.clearRect(0, 0, W, H);
 
-    // Faint center line
     ctx2d.fillStyle = 'rgba(252, 60, 68, 0.12)';
     ctx2d.fillRect(0, H / 2 - dpr, W, 2 * dpr);
 
@@ -57,7 +55,6 @@ function startVisualizer() {
         (Math.sin(t * freq[i] + phase[i]) * 0.35 + 0.55) *
         (Math.sin(t * freq[i] * 0.45 + phase[i] * 1.3) * 0.2 + 0.8)
       );
-      // Bars grow symmetrically from the centre — classic soundwave shape
       const halfH = Math.max(2 * dpr, v * H * 0.44);
       ctx2d.fillStyle = `rgba(252, 60, 68, ${0.2 + v * 0.8})`;
       ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
@@ -108,29 +105,29 @@ function recordAnswer(id, type, correct) {
   saveStats();
 }
 
-const MASTERY_ORDER = { new: 0, learning: 1, familiar: 2, mastered: 3 };
-const MASTERY_LABEL = { new: 'New', learning: 'Learning', familiar: 'Familiar', mastered: 'Mastered' };
+// Mastery: 'unheard' | 's0' | 's1' | 's2' | 's3'
+// Score = number of question types the user knows (title, artist, year)
+// A type is "known" if: at least 1 correct AND ≥50% correct overall
+const MASTERY_LABEL = { unheard: 'Unheard', s0: '0 / 3', s1: '1 / 3', s2: '2 / 3', s3: '3 / 3' };
 
-// Returns overall mastery for a song based on all studied types
 function getMastery(id) {
   const key = String(id);
   const s = songStats[key];
-  if (!s) return 'new';
-  let a = 0, c = 0;
+  if (!s) return 'unheard';
+  let hasAny = false;
+  let known = 0;
   for (const type of ['title', 'artist', 'year']) {
-    const t = s[type] || { a: 0, c: 0 };
-    a += t.a;
-    c += t.c;
+    const st = s[type];
+    if (st && st.a > 0) {
+      hasAny = true;
+      if (st.c >= 1 && st.c / st.a >= 0.5) known++;
+    }
   }
-  if (a === 0) return 'new';
-  const acc = c / a;
-  if (acc >= 0.85 && a >= 4) return 'mastered';
-  if (acc >= 0.55) return 'familiar';
-  return 'learning';
+  return hasAny ? `s${known}` : 'unheard';
 }
 
 function getMasteryStats() {
-  const counts = { new: 0, learning: 0, familiar: 0, mastered: 0 };
+  const counts = { unheard: 0, s0: 0, s1: 0, s2: 0, s3: 0 };
   state.library.forEach(s => counts[getMastery(s.id)]++);
   return counts;
 }
@@ -184,32 +181,46 @@ function removeFromLibrary(id) {
 // ── iTunes Search API ─────────────────────────────────────────────────────
 
 async function searchSongs(query) {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=24&country=de`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Search failed');
-  const data = await res.json();
-  return data.results
-    .filter(r => r.previewUrl)
-    .map(r => ({
-      id: r.trackId,
-      title: r.trackName,
-      artist: r.artistName,
-      album: r.collectionName || '',
-      year: r.releaseDate ? r.releaseDate.slice(0, 4) : '????',
-      previewUrl: r.previewUrl,
-      artwork: (r.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
-    }));
+  const makeUrl = attr =>
+    `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=30${attr}`;
+
+  const [r1, r2] = await Promise.all([
+    fetch(makeUrl('&attribute=artistTerm')),
+    fetch(makeUrl('')),
+  ]);
+
+  if (!r1.ok && !r2.ok) throw new Error('Search failed');
+
+  const [d1, d2] = await Promise.all([
+    r1.ok ? r1.json() : { results: [] },
+    r2.ok ? r2.json() : { results: [] },
+  ]);
+
+  const toSongs = data =>
+    (data.results || [])
+      .filter(r => r.previewUrl)
+      .map(r => ({
+        id: r.trackId,
+        title: r.trackName,
+        artist: r.artistName,
+        album: r.collectionName || '',
+        year: r.releaseDate ? r.releaseDate.slice(0, 4) : '????',
+        previewUrl: r.previewUrl,
+        artwork: (r.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
+      }));
+
+  // Artist-matched results first, then general — deduplicate by id
+  const seen = new Set();
+  const results = [];
+  for (const song of [...toSongs(d1), ...toSongs(d2)]) {
+    if (!seen.has(song.id)) { seen.add(song.id); results.push(song); }
+  }
+  return results;
 }
 
 // ── Study Session ─────────────────────────────────────────────────────────
 
-const QUESTION_LABELS = {
-  title: 'What is this song called?',
-  artist: 'Who is the artist?',
-  year: 'What year was this released?',
-};
-
-const TYPE_NAMES = { title: 'Title', artist: 'Artist', year: 'Year' };
+const TYPE_LABELS = { title: 'Song title', artist: 'Artist', year: 'Release year' };
 
 function shuffle(arr) {
   const a = [...arr];
@@ -220,38 +231,29 @@ function shuffle(arr) {
   return a;
 }
 
-function generateQuestion(song, type) {
-  const correct = type === 'title' ? song.title
-    : type === 'artist' ? song.artist
-    : song.year;
-  return { song, type, question: QUESTION_LABELS[type], correct, answered: null };
-}
-
 function buildStudySession() {
-  const { count, types } = state.quizConfig;
-  if (!types.length) return null;
+  const { count } = state.quizConfig;
 
-  // Group songs by mastery level, shuffle within each group so the order
-  // isn't predictable, but weaker songs still come before stronger ones.
-  const groups = { new: [], learning: [], familiar: [], mastered: [] };
+  const groups = { unheard: [], s0: [], s1: [], s2: [], s3: [] };
   state.library.forEach(s => groups[getMastery(s.id)].push(s));
-  const sorted = [
-    ...shuffle(groups.new),
-    ...shuffle(groups.learning),
-    ...shuffle(groups.familiar),
-    ...shuffle(groups.mastered),
+
+  // Priority order: unheard → 0/3 → 1/3 → 2/3, then sprinkle in 3/3 for review
+  const weak = [
+    ...shuffle(groups.unheard),
+    ...shuffle(groups.s0),
+    ...shuffle(groups.s1),
+    ...shuffle(groups.s2),
   ];
+  const reviewCount = weak.length === 0
+    ? groups.s3.length
+    : Math.min(groups.s3.length, Math.max(groups.s3.length > 0 ? 1 : 0, Math.round(weak.length / 3)));
+  const masteredSample = shuffle(groups.s3).slice(0, reviewCount);
 
-  const limit = (count === null || count >= state.library.length) ? state.library.length : count;
-  const songs = sorted.slice(0, limit);
+  let songs = [...weak, ...shuffle(masteredSample)];
+  if (count !== null && count < songs.length) songs = songs.slice(0, count);
+  if (!songs.length) return null;
 
-  const questions = [];
-  for (const song of songs) {
-    for (const type of types) {
-      questions.push(generateQuestion(song, type));
-    }
-  }
-  return questions;
+  return songs.map(song => ({ song, submitted: false }));
 }
 
 // ── Audio Player ──────────────────────────────────────────────────────────
@@ -371,7 +373,7 @@ function renderLibrary() {
         <div class="song-row-title">${esc(song.title)}</div>
         <div class="song-row-sub">${esc(song.artist)} · ${song.year}</div>
       </div>
-      <span class="mastery-dot mastery-${mastery}" title="${MASTERY_LABEL[mastery]}"></span>
+      <span class="mastery-dot mastery-${mastery}" title="${MASTERY_LABEL[mastery] || mastery}"></span>
       <button class="remove-btn" data-id="${song.id}" title="Remove">×</button>
     </div>`;
   }).join('');
@@ -387,10 +389,11 @@ function renderMasteryOverview() {
   if (!state.library.length) { el.innerHTML = ''; return; }
   const counts = getMasteryStats();
   el.innerHTML = [
-    ['mastered', '✓'],
-    ['familiar', '◑'],
-    ['learning', '◔'],
-    ['new', '○'],
+    ['s3', '★'],
+    ['s2', '◑'],
+    ['s1', '◔'],
+    ['s0', '✗'],
+    ['unheard', '○'],
   ]
     .filter(([level]) => counts[level] > 0)
     .map(([level, icon]) =>
@@ -410,94 +413,170 @@ function updateLibraryStatus() {
 
 // ── Render: Study Question ────────────────────────────────────────────────
 
-function updateSuggestions(type) {
-  const dl = document.getElementById('answer-suggestions');
-  if (!dl) return;
-  let values = [];
-  if (type === 'title') {
-    values = state.library.map(s => s.title);
-  } else if (type === 'artist') {
-    values = [...new Set(state.library.map(s => s.artist))];
-  } else if (type === 'year') {
-    values = [...new Set(state.library.map(s => s.year))].sort();
+function getDropdownItems(type, query) {
+  if (type === 'year') return [];
+  const q = query.toLowerCase().trim();
+  if (!q) return [];
+  const field = type === 'title' ? 'title' : 'artist';
+  const seen = new Set();
+  const results = [];
+  for (const s of state.library) {
+    const val = s[field];
+    if (seen.has(val)) continue;
+    if (val.toLowerCase().includes(q)) {
+      seen.add(val);
+      results.push({ main: val, sub: null, value: val });
+    }
   }
-  dl.innerHTML = values.map(v => `<option value="${esc(v)}">`).join('');
+  return results.slice(0, 8);
+}
+
+function showDropdown(ddEl, items, inputEl) {
+  ddEl.innerHTML = items.map((item, i) =>
+    `<li data-value="${esc(item.value)}" data-idx="${i}">
+      <span class="ac-main">${esc(item.main)}</span>
+      ${item.sub ? `<span class="ac-sub">${esc(item.sub)}</span>` : ''}
+    </li>`
+  ).join('');
+  ddEl.style.display = 'block';
+  ddEl.querySelectorAll('li').forEach(li => {
+    li.addEventListener('mousedown', e => {
+      e.preventDefault();
+      inputEl.value = li.dataset.value;
+      ddEl.style.display = 'none';
+      ddEl.innerHTML = '';
+    });
+  });
+}
+
+function hideAllDropdowns() {
+  for (const type of ['title', 'artist', 'year']) {
+    const dd = document.getElementById(`dropdown-${type}`);
+    if (dd) { dd.style.display = 'none'; dd.innerHTML = ''; }
+  }
+}
+
+function navigateDropdownEl(ddEl, dir) {
+  if (!ddEl || ddEl.style.display === 'none') return;
+  const items = [...ddEl.querySelectorAll('li')];
+  if (!items.length) return;
+  const activeIdx = items.findIndex(li => li.classList.contains('ac-active'));
+  items.forEach(li => li.classList.remove('ac-active'));
+  const next = activeIdx === -1 ? (dir > 0 ? 0 : items.length - 1) : (activeIdx + dir + items.length) % items.length;
+  items[next].classList.add('ac-active');
+  items[next].scrollIntoView({ block: 'nearest' });
 }
 
 function renderQuestion() {
   const q = state.quizQuestions[state.quizIndex];
-  const typesCount = state.quizConfig.types.length;
-  const currentSong = Math.floor(state.quizIndex / typesCount) + 1;
-  const totalSongs = Math.floor(state.quizQuestions.length / typesCount);
+  const total = state.quizQuestions.length;
 
-  document.getElementById('quiz-progress').textContent =
-    `Song ${currentSong} / ${totalSongs} · ${TYPE_NAMES[q.type]}`;
+  document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
   document.getElementById('quiz-score').textContent = `${state.quizScore} pts`;
-  document.getElementById('question-text').textContent = q.question;
-
-  const nextBtn = document.getElementById('next-btn');
-  nextBtn.style.display = 'none';
-
-  const answerInput = document.getElementById('answer-input');
+  document.getElementById('next-btn').style.display = 'none';
   const submitBtn = document.getElementById('submit-answer-btn');
-  const feedbackEl = document.getElementById('answer-feedback');
-
-  updateSuggestions(q.type);
-  answerInput.value = '';
-  answerInput.disabled = false;
-  answerInput.placeholder = q.type === 'year' ? 'Enter the release year…' : 'Type your answer…';
+  submitBtn.style.display = 'block';
   submitBtn.disabled = false;
-  feedbackEl.style.display = 'none';
-  feedbackEl.className = 'answer-feedback';
 
-  function submit() {
-    const val = answerInput.value.trim();
-    if (!val) return;
-    handleAnswer(val);
+  for (const type of ['title', 'artist', 'year']) {
+    const input = document.getElementById(`answer-${type}`);
+    const dd = document.getElementById(`dropdown-${type}`);
+    const resultEl = document.getElementById(`result-${type}`);
+
+    input.value = '';
+    input.disabled = false;
+    input.className = 'answer-input';
+    dd.style.display = 'none';
+    dd.innerHTML = '';
+    resultEl.textContent = '';
+    resultEl.className = 'field-result';
+
+    input.oninput = () => {
+      if (state.quizQuestions[state.quizIndex].submitted) return;
+      const items = getDropdownItems(type, input.value);
+      if (items.length) showDropdown(dd, items, input);
+      else { dd.style.display = 'none'; dd.innerHTML = ''; }
+    };
+
+    input.onkeydown = e => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (dd.style.display !== 'none') {
+          e.preventDefault();
+          navigateDropdownEl(dd, e.key === 'ArrowDown' ? 1 : -1);
+          return;
+        }
+      }
+      if (e.key === 'Escape') { dd.style.display = 'none'; dd.innerHTML = ''; return; }
+      if (e.key === 'Enter') {
+        const active = dd.querySelector('li.ac-active');
+        if (active) {
+          input.value = active.dataset.value;
+          dd.style.display = 'none';
+          dd.innerHTML = '';
+        } else {
+          handleAnswer();
+        }
+      }
+    };
+
+    input.onblur = () => { dd.style.display = 'none'; dd.innerHTML = ''; };
   }
 
-  submitBtn.onclick = submit;
-  answerInput.onkeydown = e => { if (e.key === 'Enter') submit(); };
-  setTimeout(() => answerInput.focus(), 50);
+  submitBtn.onclick = handleAnswer;
+  setTimeout(() => document.getElementById('answer-title').focus(), 50);
 
   if (q.song.previewUrl) startAudio(q.song.previewUrl);
   else startVisualizer();
 }
 
-function handleAnswer(userInput) {
+function handleAnswer() {
   const q = state.quizQuestions[state.quizIndex];
-  if (q.answered !== null) return;
-  q.answered = userInput;
+  if (q.submitted) return;
+  q.submitted = true;
 
+  hideAllDropdowns();
   stopAudio();
 
-  const isCorrect = isAnswerCorrect(userInput, q.correct, q.type);
-  state.quizScore += isCorrect ? 10 : 0;
-  state.quizAnswers.push({ correct: isCorrect, song: q.song, type: q.type });
+  const values = {
+    title: document.getElementById('answer-title').value.trim(),
+    artist: document.getElementById('answer-artist').value.trim(),
+    year: document.getElementById('answer-year').value.trim(),
+  };
 
-  recordAnswer(q.song.id, q.type, isCorrect);
+  const correct = {
+    title: isAnswerCorrect(values.title, q.song.title, 'title'),
+    artist: isAnswerCorrect(values.artist, q.song.artist, 'artist'),
+    year: isAnswerCorrect(values.year, q.song.year, 'year'),
+  };
+
+  const correctCount = Object.values(correct).filter(Boolean).length;
+  state.quizScore += correctCount * 10;
+  state.quizAnswers.push({ song: q.song, correct });
+
+  for (const type of ['title', 'artist', 'year']) {
+    recordAnswer(q.song.id, type, correct[type]);
+  }
 
   document.getElementById('quiz-score').textContent = `${state.quizScore} pts`;
 
-  const answerInput = document.getElementById('answer-input');
-  const submitBtn = document.getElementById('submit-answer-btn');
-  const feedbackEl = document.getElementById('answer-feedback');
-
-  answerInput.disabled = true;
-  submitBtn.disabled = true;
-  feedbackEl.style.display = 'block';
-
-  if (isCorrect) {
-    feedbackEl.className = 'answer-feedback correct';
-    feedbackEl.textContent = 'Correct!';
-  } else {
-    feedbackEl.className = 'answer-feedback wrong';
-    let hint = q.correct;
-    if (q.type === 'title') hint += ` — ${q.song.artist}`;
-    else if (q.type === 'artist') hint += ` (${q.song.title})`;
-    feedbackEl.textContent = `Wrong. Answer: ${hint}`;
+  const answers = { title: q.song.title, artist: q.song.artist, year: q.song.year };
+  for (const type of ['title', 'artist', 'year']) {
+    const input = document.getElementById(`answer-${type}`);
+    const resultEl = document.getElementById(`result-${type}`);
+    input.disabled = true;
+    if (correct[type]) {
+      input.className = 'answer-input correct';
+      resultEl.textContent = '✓';
+      resultEl.className = 'field-result correct';
+    } else {
+      input.className = 'answer-input wrong';
+      input.value = answers[type];
+      resultEl.textContent = '✗';
+      resultEl.className = 'field-result wrong';
+    }
   }
 
+  document.getElementById('submit-answer-btn').style.display = 'none';
   document.getElementById('next-btn').style.display = 'block';
 }
 
@@ -515,22 +594,23 @@ function advanceQuiz() {
 function showResults() {
   showView('results');
 
-  const correct = state.quizAnswers.filter(a => a.correct).length;
-  const total = state.quizAnswers.length;
+  const correct = state.quizAnswers.reduce((sum, a) => sum + Object.values(a.correct).filter(Boolean).length, 0);
+  const total = state.quizAnswers.length * 3;
   const pct = Math.round((correct / total) * 100);
 
   // Count mastery improvements during this session
-  let improved = 0, newlyMastered = 0;
+  const masteryOrder = { unheard: 0, s0: 1, s1: 2, s2: 3, s3: 4 };
+  let improved = 0, newlyComplete = 0;
   const seenSongs = new Set();
   state.quizQuestions.forEach(q => {
     const id = String(q.song.id);
     if (seenSongs.has(id)) return;
     seenSongs.add(id);
-    const before = state.preMastery[id] || 'new';
+    const before = state.preMastery[id] || 'unheard';
     const after = getMastery(q.song.id);
-    if (MASTERY_ORDER[after] > MASTERY_ORDER[before]) {
+    if (masteryOrder[after] > masteryOrder[before]) {
       improved++;
-      if (after === 'mastered') newlyMastered++;
+      if (after === 's3') newlyComplete++;
     }
   });
 
@@ -538,18 +618,17 @@ function showResults() {
   document.getElementById('results-emoji').textContent = emoji;
   document.getElementById('results-score').textContent = `${correct} / ${total}`;
 
-  const byType = {};
+  const byType = { title: { correct: 0, total: 0 }, artist: { correct: 0, total: 0 }, year: { correct: 0, total: 0 } };
   state.quizAnswers.forEach(a => {
-    if (!byType[a.type]) byType[a.type] = { correct: 0, total: 0 };
-    byType[a.type].total++;
-    if (a.correct) byType[a.type].correct++;
+    for (const type of ['title', 'artist', 'year']) {
+      byType[type].total++;
+      if (a.correct[type]) byType[type].correct++;
+    }
   });
-
-  const typeLabels = { title: 'Song title', artist: 'Artist', year: 'Release year' };
   const masteryAfter = getMasteryStats();
-  const masteryIcons = { mastered: '✓', familiar: '◑', learning: '◔', new: '○' };
+  const masteryIcons = { s3: '★', s2: '◑', s1: '◔', s0: '✗', unheard: '○' };
 
-  const libraryProgress = ['mastered', 'familiar', 'learning', 'new']
+  const libraryProgress = ['s3', 's2', 's1', 's0', 'unheard']
     .filter(l => masteryAfter[l] > 0)
     .map(l => `${masteryIcons[l]} ${masteryAfter[l]}`)
     .join('  ');
@@ -563,11 +642,11 @@ function showResults() {
     ${improved > 0 ? `
     <div class="breakdown-row">
       <span>Songs improved</span>
-      <span class="correct-row">${improved}${newlyMastered > 0 ? ` · ${newlyMastered} mastered` : ''}</span>
+      <span class="correct-row">${improved}${newlyComplete > 0 ? ` · ${newlyComplete} fully learned` : ''}</span>
     </div>` : ''}
     ${Object.entries(byType).map(([type, stat]) => `
     <div class="breakdown-row">
-      <span>${typeLabels[type] || type}</span>
+      <span>${TYPE_LABELS[type] || type}</span>
       <span>${stat.correct} / ${stat.total}</span>
     </div>`).join('')}
     <div class="breakdown-row">
@@ -603,7 +682,7 @@ function parsePasteLines(text) {
 
 async function searchBestMatch({ artist, title }) {
   const query = artist ? `${artist} ${title}` : title;
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10&country=de`;
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10`;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, 2500 * attempt));
@@ -766,16 +845,10 @@ function handleImportRun() {
 // ── Event Wiring ──────────────────────────────────────────────────────────
 
 function startSession() {
-  const types = [...document.querySelectorAll('input[name="qtype"]:checked')].map(cb => cb.value);
   const setupError = document.getElementById('setup-error');
 
   if (state.library.length < 2) {
     setupError.textContent = 'Add at least 2 songs to your library first.';
-    setupError.style.display = 'block';
-    return;
-  }
-  if (!types.length) {
-    setupError.textContent = 'Select at least one question type.';
     setupError.style.display = 'block';
     return;
   }
@@ -785,7 +858,7 @@ function startSession() {
   const studyAll = studyAllCheckbox ? studyAllCheckbox.checked : true;
   const count = studyAll ? null : parseInt(document.getElementById('q-count').textContent, 10);
 
-  state.quizConfig = { count, types };
+  state.quizConfig = { count };
 
   // Snapshot mastery before session so results can show improvements
   state.preMastery = {};
