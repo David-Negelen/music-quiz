@@ -608,24 +608,32 @@ function parsePasteLines(text) {
 
 async function searchBestMatch({ artist, title }) {
   const query = artist ? `${artist} ${title}` : title;
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=5&country=de`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const results = data.results.filter(r => r.previewUrl);
-  if (!results.length) return null;
-  const lower = title.toLowerCase();
-  const exact = results.find(r => r.trackName.toLowerCase() === lower);
-  const r = exact || results[0];
-  return {
-    id: r.trackId,
-    title: r.trackName,
-    artist: r.artistName,
-    album: r.collectionName || '',
-    year: r.releaseDate ? r.releaseDate.slice(0, 4) : '????',
-    previewUrl: r.previewUrl,
-    artwork: (r.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
-  };
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10&country=de`;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2500 * attempt));
+    try {
+      const res = await fetch(url);
+      if (res.status === 429 || res.status >= 500) continue;
+      if (!res.ok) return null;
+      const data = await res.json();
+      const results = data.results.filter(r => r.previewUrl);
+      if (!results.length) return null;
+      const lower = title.toLowerCase();
+      const exact = results.find(r => r.trackName.toLowerCase() === lower);
+      const r = exact || results[0];
+      return {
+        id: r.trackId,
+        title: r.trackName,
+        artist: r.artistName,
+        album: r.collectionName || '',
+        year: r.releaseDate ? r.releaseDate.slice(0, 4) : '????',
+        previewUrl: r.previewUrl,
+        artwork: (r.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
+      };
+    } catch { /* network blip — retry */ }
+  }
+  return null;
 }
 
 async function runBulkImport(entries) {
@@ -669,7 +677,12 @@ async function runBulkImport(entries) {
       notFound.push(entry.artist ? `${entry.artist} – ${entry.title}` : entry.title);
     }
 
-    if (i < entries.length - 1) await new Promise(r => setTimeout(r, 120));
+    if (i < entries.length - 1) {
+      // Longer pause every 10 songs to stay well under the iTunes rate limit
+      const delay = (i + 1) % 10 === 0 ? 3000 : 400;
+      if ((i + 1) % 10 === 0) statusEl.textContent = `Pausing briefly to avoid rate limits…`;
+      await new Promise(r => setTimeout(r, delay));
+    }
   }
 
   statusEl.textContent = 'Done.';
