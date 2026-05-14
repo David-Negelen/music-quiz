@@ -248,6 +248,27 @@ body {
 
 .library-actions { display: flex; gap: 6px; }
 
+.library-actions .btn-ghost {
+  border: 0.5px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 6px 14px;
+}
+
+.library-actions .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+#clear-library-btn:hover {
+  border-color: rgba(255, 82, 82, 0.4);
+  color: var(--accent);
+  background: rgba(255, 82, 82, 0.05);
+}
+
 .library-header h2 {
   font-size: 15px;
   font-weight: 600;
@@ -330,9 +351,9 @@ body {
   margin-right: 2px;
 }
 
-.mastery-unheard { background: var(--text-3); }
-.mastery-s0      { background: #ff453a; }
-.mastery-s1      { background: #ff9f0a; }
+.mastery-unheard { background: rgba(255, 255, 255, 0.15); }
+.mastery-s0      { background: #e55; }
+.mastery-s1      { background: #f90; }
 .mastery-s2      { background: #ffd60a; }
 .mastery-s3      { background: var(--success); }
 
@@ -340,13 +361,13 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  min-height: 24px;
+  min-height: 0;
 }
 
 .mastery-pill {
   font-size: 12px;
   font-weight: 600;
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: 99px;
 }
 
@@ -378,16 +399,18 @@ body {
 
 .hint { font-size: 12px; color: var(--text-3); margin-top: 8px; }
 
+#library-status { font-size: 12px; color: rgba(255, 255, 255, 0.3); margin-top: 0; }
+
 /* ── Quiz Setup ──────────────────────────────────────────────────────────── */
 
 .setup-card {
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 28px 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   max-width: 420px;
   margin: 0 auto;
 }
@@ -443,10 +466,25 @@ body {
 }
 
 .checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
   cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.checkbox-label input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 5L4 7.5L8.5 2.5' stroke='white' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 10px 10px;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* ── Active Quiz ─────────────────────────────────────────────────────────── */
@@ -558,10 +596,9 @@ body {
   -webkit-appearance: none;
   appearance: none;
   width: 68px;
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
-  background: var(--surface-3);
-  accent-color: var(--accent);
+  background: rgba(255, 255, 255, 0.08);
   cursor: pointer;
   flex-shrink: 0;
   outline: none;
@@ -569,20 +606,26 @@ body {
 
 .volume-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--accent);
+  background: rgba(255, 255, 255, 0.35);
   cursor: pointer;
+  transition: background 0.15s;
+}
+
+.volume-slider:hover::-webkit-slider-thumb {
+  background: white;
 }
 
 .volume-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--accent);
+  background: rgba(255, 255, 255, 0.35);
   border: none;
   cursor: pointer;
+  transition: background 0.15s;
 }
 
 .answer-fields {
