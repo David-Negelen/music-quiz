@@ -51,8 +51,12 @@
         <h2>Quiz Settings</h2>
 
         <div class="setting-group">
-          <label class="setting-label">Number of questions</label>
-          <div class="number-picker">
+          <label class="setting-label">Songs per session</label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="study-all" checked>
+            <span>All songs (weakest first)</span>
+          </label>
+          <div class="number-picker" id="count-picker" style="display:none">
             <button class="picker-btn" id="q-minus">−</button>
             <span id="q-count">10</span>
             <button class="picker-btn" id="q-plus">+</button>
@@ -77,9 +81,11 @@
           </div>
         </div>
 
+        <div id="mastery-overview" class="mastery-overview"></div>
+
         <p id="library-status" class="hint"></p>
         <div id="setup-error" class="error-msg" style="display:none"></div>
-        <button id="start-quiz-btn" class="btn-primary btn-lg">Start Quiz</button>
+        <button id="start-quiz-btn" class="btn-primary btn-lg">Start Session</button>
       </div>
     </section>
 
@@ -119,11 +125,11 @@
     <section id="view-results" class="view">
       <div class="results-card">
         <div id="results-emoji" class="results-emoji"></div>
-        <h2 id="results-title">Quiz Complete!</h2>
+        <h2 id="results-title">Session Complete!</h2>
         <div id="results-score" class="results-score-big"></div>
         <div id="results-breakdown" class="results-breakdown"></div>
         <div class="results-actions">
-          <button id="retry-btn" class="btn-primary btn-lg">Play Again</button>
+          <button id="retry-btn" class="btn-primary btn-lg">Study Again</button>
           <button id="back-library-btn" class="btn-ghost btn-lg">Edit Library</button>
         </div>
       </div>

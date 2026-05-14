@@ -7,7 +7,8 @@ const state = {
   quizIndex: 0,
   quizScore: 0,
   quizAnswers: [],
-  quizConfig: { count: 10, types: ['title', 'artist', 'year'] },
+  quizConfig: { count: null, types: ['title', 'artist', 'year'] }, // count null = all
+  preMastery: {}, // mastery snapshot taken before each session
 };
 
 const audio = document.getElementById('preview-audio');
@@ -92,6 +93,55 @@ function isAnswerCorrect(userInput, correct, type) {
   return a === b || stripThe(a) === stripThe(b);
 }
 
+// ── Stats & Mastery ───────────────────────────────────────────────────────
+
+let songStats = {};
+
+function loadStats() {
+  try { songStats = JSON.parse(localStorage.getItem('musikquiz_stats') || '{}'); }
+  catch { songStats = {}; }
+}
+
+function saveStats() {
+  localStorage.setItem('musikquiz_stats', JSON.stringify(songStats));
+}
+
+function recordAnswer(id, type, correct) {
+  const key = String(id);
+  if (!songStats[key]) songStats[key] = {};
+  if (!songStats[key][type]) songStats[key][type] = { a: 0, c: 0 };
+  songStats[key][type].a++;
+  if (correct) songStats[key][type].c++;
+  saveStats();
+}
+
+const MASTERY_ORDER = { new: 0, learning: 1, familiar: 2, mastered: 3 };
+const MASTERY_LABEL = { new: 'New', learning: 'Learning', familiar: 'Familiar', mastered: 'Mastered' };
+
+// Returns overall mastery for a song based on all studied types
+function getMastery(id) {
+  const key = String(id);
+  const s = songStats[key];
+  if (!s) return 'new';
+  let a = 0, c = 0;
+  for (const type of ['title', 'artist', 'year']) {
+    const t = s[type] || { a: 0, c: 0 };
+    a += t.a;
+    c += t.c;
+  }
+  if (a === 0) return 'new';
+  const acc = c / a;
+  if (acc >= 0.85 && a >= 4) return 'mastered';
+  if (acc >= 0.55) return 'familiar';
+  return 'learning';
+}
+
+function getMasteryStats() {
+  const counts = { new: 0, learning: 0, familiar: 0, mastered: 0 };
+  state.library.forEach(s => counts[getMastery(s.id)]++);
+  return counts;
+}
+
 // ── Persistence ───────────────────────────────────────────────────────────
 
 function loadLibrary() {
@@ -100,6 +150,7 @@ function loadLibrary() {
   } catch {
     state.library = [];
   }
+  loadStats();
 }
 
 function saveLibrary() {
@@ -116,7 +167,6 @@ function addToLibrary(song) {
   saveLibrary();
   renderLibrary();
   updateLibraryStatus();
-  // Refresh search result buttons
   document.querySelectorAll(`.add-btn[data-id="${song.id}"]`).forEach(btn => {
     btn.classList.add('added');
     btn.disabled = true;
@@ -126,7 +176,9 @@ function addToLibrary(song) {
 
 function removeFromLibrary(id) {
   state.library = state.library.filter(s => s.id !== id);
+  delete songStats[String(id)];
   saveLibrary();
+  saveStats();
   renderLibrary();
   updateLibraryStatus();
   document.querySelectorAll(`.add-btn[data-id="${id}"]`).forEach(btn => {
@@ -156,13 +208,15 @@ async function searchSongs(query) {
     }));
 }
 
-// ── Quiz Generation ───────────────────────────────────────────────────────
+// ── Study Session ─────────────────────────────────────────────────────────
 
 const QUESTION_LABELS = {
   title: 'What is this song called?',
   artist: 'Who is the artist?',
   year: 'What year was this released?',
 };
+
+const TYPE_NAMES = { title: 'Title', artist: 'Artist', year: 'Year' };
 
 function shuffle(arr) {
   const a = [...arr];
@@ -173,7 +227,6 @@ function shuffle(arr) {
   return a;
 }
 
-
 function generateQuestion(song, type) {
   const correct = type === 'title' ? song.title
     : type === 'artist' ? song.artist
@@ -181,14 +234,37 @@ function generateQuestion(song, type) {
   return { song, type, question: QUESTION_LABELS[type], correct, answered: null };
 }
 
-function buildQuiz() {
+function buildStudySession() {
   const { count, types } = state.quizConfig;
-  if (types.length === 0) return null;
-  const songs = shuffle(state.library).slice(0, Math.min(count, state.library.length));
-  return songs.map(song => {
-    const type = types[Math.floor(Math.random() * types.length)];
-    return generateQuestion(song, type);
+  if (!types.length) return null;
+
+  // Sort songs: new & learning first (prioritise weakest), mastered last
+  // Within same mastery level: lowest accuracy first
+  const getAcc = id => {
+    const s = songStats[String(id)];
+    if (!s) return -1;
+    let ta = 0, tc = 0;
+    for (const t of types) { const x = s[t] || { a: 0, c: 0 }; ta += x.a; tc += x.c; }
+    return ta ? tc / ta : -1;
+  };
+
+  const sorted = [...state.library].sort((a, b) => {
+    const ma = MASTERY_ORDER[getMastery(a.id)];
+    const mb = MASTERY_ORDER[getMastery(b.id)];
+    if (ma !== mb) return ma - mb;
+    return getAcc(a.id) - getAcc(b.id);
   });
+
+  const limit = (count === null || count >= state.library.length) ? state.library.length : count;
+  const songs = sorted.slice(0, limit);
+
+  const questions = [];
+  for (const song of songs) {
+    for (const type of types) {
+      questions.push(generateQuestion(song, type));
+    }
+  }
+  return questions;
 }
 
 // ── Audio Player ──────────────────────────────────────────────────────────
@@ -304,36 +380,62 @@ function renderLibrary() {
     return;
   }
   empty.style.display = 'none';
-  list.innerHTML = state.library.map((song, i) => `
+  list.innerHTML = state.library.map((song) => {
+    const mastery = getMastery(song.id);
+    return `
     <div class="song-row">
       <img src="${song.artwork}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <div class="song-row-info">
         <div class="song-row-title">${esc(song.title)}</div>
         <div class="song-row-sub">${esc(song.artist)} · ${song.year}</div>
       </div>
+      <span class="mastery-dot mastery-${mastery}" title="${MASTERY_LABEL[mastery]}"></span>
       <button class="remove-btn" data-id="${song.id}" title="Remove">×</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   list.querySelectorAll('.remove-btn').forEach(btn => {
     btn.addEventListener('click', () => removeFromLibrary(Number(btn.dataset.id)));
   });
 }
 
+function renderMasteryOverview() {
+  const el = document.getElementById('mastery-overview');
+  if (!el) return;
+  if (!state.library.length) { el.innerHTML = ''; return; }
+  const counts = getMasteryStats();
+  el.innerHTML = [
+    ['mastered', '✓'],
+    ['familiar', '◑'],
+    ['learning', '◔'],
+    ['new', '○'],
+  ]
+    .filter(([level]) => counts[level] > 0)
+    .map(([level, icon]) =>
+      `<span class="mastery-pill mastery-pill-${level}">${icon} ${counts[level]} ${MASTERY_LABEL[level]}</span>`
+    )
+    .join('');
+}
+
 function updateLibraryStatus() {
   const el = document.getElementById('library-status');
   const n = state.library.length;
   if (n === 0) el.textContent = 'Add songs to your library first.';
-  else if (n < 4) el.textContent = `${n} song${n > 1 ? 's' : ''} in library — need at least 4 to quiz.`;
+  else if (n < 2) el.textContent = `${n} song in library — add at least one more to start.`;
   else el.textContent = `${n} songs in library.`;
+  renderMasteryOverview();
 }
 
-// ── Render: Quiz ──────────────────────────────────────────────────────────
+// ── Render: Study Question ────────────────────────────────────────────────
 
 function renderQuestion() {
   const q = state.quizQuestions[state.quizIndex];
-  const total = state.quizQuestions.length;
+  const typesCount = state.quizConfig.types.length;
+  const currentSong = Math.floor(state.quizIndex / typesCount) + 1;
+  const totalSongs = Math.floor(state.quizQuestions.length / typesCount);
 
-  document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
+  document.getElementById('quiz-progress').textContent =
+    `Song ${currentSong} / ${totalSongs} · ${TYPE_NAMES[q.type]}`;
   document.getElementById('quiz-score').textContent = `${state.quizScore} pts`;
   document.getElementById('question-text').textContent = q.question;
 
@@ -375,6 +477,8 @@ function handleAnswer(userInput) {
   const isCorrect = isAnswerCorrect(userInput, q.correct, q.type);
   state.quizScore += isCorrect ? 10 : 0;
   state.quizAnswers.push({ correct: isCorrect, song: q.song, type: q.type });
+
+  recordAnswer(q.song.id, q.type, isCorrect);
 
   document.getElementById('quiz-score').textContent = `${state.quizScore} pts`;
 
@@ -418,9 +522,24 @@ function showResults() {
   const total = state.quizAnswers.length;
   const pct = Math.round((correct / total) * 100);
 
+  // Count mastery improvements during this session
+  let improved = 0, newlyMastered = 0;
+  const seenSongs = new Set();
+  state.quizQuestions.forEach(q => {
+    const id = String(q.song.id);
+    if (seenSongs.has(id)) return;
+    seenSongs.add(id);
+    const before = state.preMastery[id] || 'new';
+    const after = getMastery(q.song.id);
+    if (MASTERY_ORDER[after] > MASTERY_ORDER[before]) {
+      improved++;
+      if (after === 'mastered') newlyMastered++;
+    }
+  });
+
   const emoji = pct >= 90 ? '🏆' : pct >= 70 ? '🎵' : pct >= 50 ? '🎶' : '🎸';
   document.getElementById('results-emoji').textContent = emoji;
-  document.getElementById('results-score').textContent = `${state.quizScore} / ${total * 10} pts`;
+  document.getElementById('results-score').textContent = `${correct} / ${total}`;
 
   const byType = {};
   state.quizAnswers.forEach(a => {
@@ -430,17 +549,34 @@ function showResults() {
   });
 
   const typeLabels = { title: 'Song title', artist: 'Artist', year: 'Release year' };
+  const masteryAfter = getMasteryStats();
+  const masteryIcons = { mastered: '✓', familiar: '◑', learning: '◔', new: '○' };
+
+  const libraryProgress = ['mastered', 'familiar', 'learning', 'new']
+    .filter(l => masteryAfter[l] > 0)
+    .map(l => `${masteryIcons[l]} ${masteryAfter[l]}`)
+    .join('  ');
+
   const breakdown = document.getElementById('results-breakdown');
   breakdown.innerHTML = `
     <div class="breakdown-row">
-      <span>Correct answers</span>
-      <span class="correct-row">${correct} / ${total} (${pct}%)</span>
+      <span>Accuracy</span>
+      <span>${pct}%</span>
     </div>
+    ${improved > 0 ? `
+    <div class="breakdown-row">
+      <span>Songs improved</span>
+      <span class="correct-row">${improved}${newlyMastered > 0 ? ` · ${newlyMastered} mastered` : ''}</span>
+    </div>` : ''}
     ${Object.entries(byType).map(([type, stat]) => `
-      <div class="breakdown-row">
-        <span>${typeLabels[type] || type}</span>
-        <span>${stat.correct} / ${stat.total}</span>
-      </div>`).join('')}`;
+    <div class="breakdown-row">
+      <span>${typeLabels[type] || type}</span>
+      <span>${stat.correct} / ${stat.total}</span>
+    </div>`).join('')}
+    <div class="breakdown-row">
+      <span>Library progress</span>
+      <span class="mastery-summary">${libraryProgress}</span>
+    </div>`;
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────
@@ -455,7 +591,6 @@ function esc(str) {
 
 // ── Bulk Import ───────────────────────────────────────────────────────────
 
-// Parse "Artist - Title" or plain "Title" lines from pasted text
 function parsePasteLines(text) {
   return text.split('\n')
     .map(l => l.trim())
@@ -477,7 +612,6 @@ async function searchBestMatch({ artist, title }) {
   const data = await res.json();
   const results = data.results.filter(r => r.previewUrl);
   if (!results.length) return null;
-  // Prefer exact title match if available
   const lower = title.toLowerCase();
   const exact = results.find(r => r.trackName.toLowerCase() === lower);
   const r = exact || results[0];
@@ -533,7 +667,6 @@ async function runBulkImport(entries) {
       notFound.push(entry.artist ? `${entry.artist} – ${entry.title}` : entry.title);
     }
 
-    // Small delay to avoid hammering the iTunes API
     if (i < entries.length - 1) await new Promise(r => setTimeout(r, 120));
   }
 
@@ -622,6 +755,41 @@ function handleImportRun() {
 
 // ── Event Wiring ──────────────────────────────────────────────────────────
 
+function startSession() {
+  const types = [...document.querySelectorAll('input[name="qtype"]:checked')].map(cb => cb.value);
+  const setupError = document.getElementById('setup-error');
+
+  if (state.library.length < 2) {
+    setupError.textContent = 'Add at least 2 songs to your library first.';
+    setupError.style.display = 'block';
+    return;
+  }
+  if (!types.length) {
+    setupError.textContent = 'Select at least one question type.';
+    setupError.style.display = 'block';
+    return;
+  }
+  setupError.style.display = 'none';
+
+  const studyAllCheckbox = document.getElementById('study-all');
+  const studyAll = studyAllCheckbox ? studyAllCheckbox.checked : true;
+  const count = studyAll ? null : parseInt(document.getElementById('q-count').textContent, 10);
+
+  state.quizConfig = { count, types };
+
+  // Snapshot mastery before session so results can show improvements
+  state.preMastery = {};
+  state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
+
+  state.quizQuestions = buildStudySession();
+  state.quizIndex = 0;
+  state.quizScore = 0;
+  state.quizAnswers = [];
+
+  showView('quiz-active');
+  renderQuestion();
+}
+
 function init() {
   loadLibrary();
   renderLibrary();
@@ -629,7 +797,10 @@ function init() {
 
   // Nav
   document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => showView(btn.dataset.view));
+    btn.addEventListener('click', () => {
+      showView(btn.dataset.view);
+      if (btn.dataset.view === 'quiz-setup') renderMasteryOverview();
+    });
   });
 
   // Search
@@ -713,10 +884,11 @@ function init() {
     if (!state.library.length) return;
     if (confirm(`Remove all ${state.library.length} songs from your library?`)) {
       state.library = [];
+      songStats = {};
       saveLibrary();
+      saveStats();
       renderLibrary();
       updateLibraryStatus();
-      // Reset add buttons in search results
       document.querySelectorAll('.add-btn.added').forEach(btn => {
         btn.classList.remove('added');
         btn.disabled = false;
@@ -725,49 +897,38 @@ function init() {
     }
   });
 
-  // Quiz setup — question count picker
+  // Songs per session picker
   let qCount = 10;
   const qCountEl = document.getElementById('q-count');
+  const studyAllCheckbox = document.getElementById('study-all');
+  const countPicker = document.getElementById('count-picker');
+
+  function updateCountDisplay() { qCountEl.textContent = qCount; }
+
+  if (studyAllCheckbox) {
+    studyAllCheckbox.addEventListener('change', () => {
+      countPicker.style.display = studyAllCheckbox.checked ? 'none' : 'flex';
+    });
+  }
+
   document.getElementById('q-minus').addEventListener('click', () => {
-    if (qCount > 1) { qCount--; qCountEl.textContent = qCount; }
+    if (qCount > 1) { qCount--; updateCountDisplay(); }
   });
   document.getElementById('q-plus').addEventListener('click', () => {
-    if (qCount < 50) { qCount++; qCountEl.textContent = qCount; }
+    if (qCount < 200) { qCount++; updateCountDisplay(); }
   });
 
-  // Start quiz
-  document.getElementById('start-quiz-btn').addEventListener('click', () => {
-    const types = [...document.querySelectorAll('input[name="qtype"]:checked')].map(cb => cb.value);
-    const setupError = document.getElementById('setup-error');
-
-    if (state.library.length < 4) {
-      setupError.textContent = 'Add at least 4 songs to your library first.';
-      setupError.style.display = 'block';
-      return;
-    }
-    if (!types.length) {
-      setupError.textContent = 'Select at least one question type.';
-      setupError.style.display = 'block';
-      return;
-    }
-    setupError.style.display = 'none';
-
-    state.quizConfig = { count: qCount, types };
-    state.quizQuestions = buildQuiz();
-    state.quizIndex = 0;
-    state.quizScore = 0;
-    state.quizAnswers = [];
-
-    showView('quiz-active');
-    renderQuestion();
-  });
+  // Start session
+  document.getElementById('start-quiz-btn').addEventListener('click', startSession);
 
   // Next question
   document.getElementById('next-btn').addEventListener('click', advanceQuiz);
 
   // Results actions
   document.getElementById('retry-btn').addEventListener('click', () => {
-    state.quizQuestions = buildQuiz();
+    state.preMastery = {};
+    state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
+    state.quizQuestions = buildStudySession();
     state.quizIndex = 0;
     state.quizScore = 0;
     state.quizAnswers = [];
