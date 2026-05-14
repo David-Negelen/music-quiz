@@ -1,5 +1,8 @@
 {
   "scripts": {
-    "dev": "npx live-server --port=8080 --host=localhost"
+    "dev": "live-server --port=8080 --host=localhost --watch=index.html,style.css,app.js"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
   }
 }
