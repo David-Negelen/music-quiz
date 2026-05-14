@@ -16,31 +16,9 @@ let timerInterval = null;
 let timerSeconds = 30;
 let progressInterval = null;
 
-// Web Audio visualizer
-let audioCtx = null;
-let analyser = null;
-let gainNode = null;
-let mediaSource = null;
+// Visualizer
 let animFrameId = null;
 let currentVolume = 1;
-
-// Must be called synchronously inside a user-gesture handler so the
-// AudioContext is created/resumed while the activation is still live.
-function ensureAudioGraph() {
-  if (audioCtx) return;
-  try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    gainNode = audioCtx.createGain();
-    gainNode.gain.value = 1;
-    mediaSource = audioCtx.createMediaElementSource(audio);
-    mediaSource.connect(gainNode);
-    gainNode.connect(analyser);
-    analyser.connect(audioCtx.destination);
-  } catch (e) {}
-}
 
 function startVisualizer() {
   if (animFrameId) cancelAnimationFrame(animFrameId);
@@ -52,26 +30,37 @@ function startVisualizer() {
   canvas.height = (canvas.offsetHeight || 160) * dpr;
 
   const ctx2d = canvas.getContext('2d');
-  const BIN_COUNT = 72;
-  const dataArray = new Uint8Array(128);
+  const N = 72;
+  // Per-bar random frequencies give each bar its own speed so it looks organic
+  const freq = Array.from({ length: N }, () => 0.6 + Math.random() * 0.8);
+  const phase = Array.from({ length: N }, () => Math.random() * Math.PI * 2);
+  let t = 0;
 
   function draw() {
     animFrameId = requestAnimationFrame(draw);
-    if (analyser) analyser.getByteFrequencyData(dataArray);
-
     const W = canvas.width;
     const H = canvas.height;
-    const count = Math.min(BIN_COUNT, dataArray.length);
     const gap = 2 * dpr;
-    const barW = (W - gap * (count - 1)) / count;
+    const barW = (W - gap * (N - 1)) / N;
 
     ctx2d.clearRect(0, 0, W, H);
 
-    for (let i = 0; i < count; i++) {
-      const v = dataArray[i] / 255;
-      const bH = Math.max(2 * dpr, v * H * 0.95);
-      ctx2d.fillStyle = `rgba(252, 60, 68, ${0.25 + v * 0.75})`;
-      ctx2d.fillRect(i * (barW + gap), H - bH, barW, bH);
+    // Faint center line
+    ctx2d.fillStyle = 'rgba(252, 60, 68, 0.12)';
+    ctx2d.fillRect(0, H / 2 - dpr, W, 2 * dpr);
+
+    if (audio.paused) return;
+
+    t += 0.035;
+    for (let i = 0; i < N; i++) {
+      const v = Math.max(0.04,
+        (Math.sin(t * freq[i] + phase[i]) * 0.35 + 0.55) *
+        (Math.sin(t * freq[i] * 0.45 + phase[i] * 1.3) * 0.2 + 0.8)
+      );
+      // Bars grow symmetrically from the centre — classic soundwave shape
+      const halfH = Math.max(2 * dpr, v * H * 0.44);
+      ctx2d.fillStyle = `rgba(252, 60, 68, ${0.2 + v * 0.8})`;
+      ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
     }
   }
 
@@ -306,22 +295,13 @@ function startAudio(url) {
     timerDisplay.textContent = '0:00';
   };
 
-  // resume() returns an already-resolved Promise when the context is running,
-  // so .then() fires in the current microtask and stays within the user-gesture
-  // activation window on Chrome/Firefox/Safari desktop.
   playBtn.onclick = () => {
-    ensureAudioGraph();
     if (!audio.paused) { audio.pause(); return; }
-    const p = audioCtx ? audioCtx.resume() : Promise.resolve();
-    p.then(() => audio.play().catch(() => {}));
+    audio.play().catch(() => {});
   };
 
   startVisualizer();
-
-  // Autoplay — callers (startSession / next-btn / retry-btn) call
-  // ensureAudioGraph() first, so audioCtx is already created and running.
-  const p = audioCtx ? audioCtx.resume() : Promise.resolve();
-  p.then(() => audio.play().catch(() => { playIcon.textContent = '▶'; }));
+  audio.play().catch(() => { playIcon.textContent = '▶'; });
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────
@@ -430,6 +410,20 @@ function updateLibraryStatus() {
 
 // ── Render: Study Question ────────────────────────────────────────────────
 
+function updateSuggestions(type) {
+  const dl = document.getElementById('answer-suggestions');
+  if (!dl) return;
+  let values = [];
+  if (type === 'title') {
+    values = state.library.map(s => s.title);
+  } else if (type === 'artist') {
+    values = [...new Set(state.library.map(s => s.artist))];
+  } else if (type === 'year') {
+    values = [...new Set(state.library.map(s => s.year))].sort();
+  }
+  dl.innerHTML = values.map(v => `<option value="${esc(v)}">`).join('');
+}
+
 function renderQuestion() {
   const q = state.quizQuestions[state.quizIndex];
   const typesCount = state.quizConfig.types.length;
@@ -448,6 +442,7 @@ function renderQuestion() {
   const submitBtn = document.getElementById('submit-answer-btn');
   const feedbackEl = document.getElementById('answer-feedback');
 
+  updateSuggestions(q.type);
   answerInput.value = '';
   answerInput.disabled = false;
   answerInput.placeholder = q.type === 'year' ? 'Enter the release year…' : 'Type your answer…';
@@ -790,7 +785,6 @@ function startSession() {
   const studyAll = studyAllCheckbox ? studyAllCheckbox.checked : true;
   const count = studyAll ? null : parseInt(document.getElementById('q-count').textContent, 10);
 
-  ensureAudioGraph(); // must happen synchronously inside this click handler
   state.quizConfig = { count, types };
 
   // Snapshot mastery before session so results can show improvements
@@ -947,14 +941,10 @@ function init() {
   document.getElementById('start-quiz-btn').addEventListener('click', startSession);
 
   // Next question
-  document.getElementById('next-btn').addEventListener('click', () => {
-    ensureAudioGraph();
-    advanceQuiz();
-  });
+  document.getElementById('next-btn').addEventListener('click', advanceQuiz);
 
   // Results actions
   document.getElementById('retry-btn').addEventListener('click', () => {
-    ensureAudioGraph();
     state.preMastery = {};
     state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
     state.quizQuestions = buildStudySession();

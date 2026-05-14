@@ -113,7 +113,8 @@
         <div id="question-text" class="question-text"></div>
 
         <div class="answer-area">
-          <input type="text" id="answer-input" class="answer-input" placeholder="Type your answer…" autocomplete="off" spellcheck="false">
+          <input type="text" id="answer-input" class="answer-input" placeholder="Type your answer…" list="answer-suggestions" autocomplete="off" spellcheck="false">
+          <datalist id="answer-suggestions"></datalist>
           <button id="submit-answer-btn" class="btn-primary">Check</button>
         </div>
         <div id="answer-feedback" class="answer-feedback" style="display:none"></div>
