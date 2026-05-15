@@ -150,6 +150,14 @@ function getFieldMastery(id) {
   return result;
 }
 
+function knowledgeScore(id) {
+  const s = songStats[String(id)];
+  if (!s) return -1;
+  const a = (s.title?.a || 0) + (s.artist?.a || 0) + (s.year?.a || 0);
+  if (!a) return -1;
+  return ((s.title?.c || 0) + (s.artist?.c || 0) + (s.year?.c || 0)) / a;
+}
+
 function getFieldAccuracyStats() {
   const total = state.library.length;
   if (!total) return { title: null, artist: null, year: null };
@@ -461,9 +469,10 @@ function renderLibrary() {
   }
   empty.style.display = 'none';
   const sorted = [...state.library].sort((a, b) => {
-    if (state.librarySort === 'artist') return a.artist.localeCompare(b.artist);
-    if (state.librarySort === 'year')   return (a.year || 0) - (b.year || 0);
-    if (state.librarySort === 'added')  return 0; // DB returns newest-first already
+    if (state.librarySort === 'artist')    return a.artist.localeCompare(b.artist);
+    if (state.librarySort === 'year')      return (a.year || 0) - (b.year || 0);
+    if (state.librarySort === 'knowledge') return knowledgeScore(a.id) - knowledgeScore(b.id);
+    if (state.librarySort === 'added')     return 0; // DB returns newest-first already
     return a.title.localeCompare(b.title); // default: title
   });
   list.innerHTML = sorted.map((song) => {
@@ -482,12 +491,20 @@ function renderLibrary() {
         <span class="mastery-dot-field mastery-field-${fm.artist}"></span>
         <span class="mastery-dot-field mastery-field-${fm.year}"></span>
       </span>
+      <button class="history-btn" data-id="${song.id}" title="View history"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg></button>
       <button class="remove-btn" data-id="${song.id}" title="Remove">×</button>
     </div>`;
   }).join('');
 
   list.querySelectorAll('.remove-btn').forEach(btn => {
     btn.addEventListener('click', () => removeFromLibrary(Number(btn.dataset.id)));
+  });
+
+  list.querySelectorAll('.history-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const song = state.library.find(s => String(s.id) === btn.dataset.id);
+      if (song) openSongHistory(song);
+    });
   });
 }
 
@@ -1148,6 +1165,90 @@ async function runBulkImport(entries) {
   cancelBtn.disabled = false;
 }
 
+// ── Song History Modal ────────────────────────────────────────────────────
+
+function utcDate(raw) {
+  return new Date(raw.includes('Z') ? raw : raw.replace(' ', 'T') + 'Z');
+}
+
+function formatHistoryDate(raw) {
+  return utcDate(raw).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function openSongHistory(song) {
+  document.getElementById('shm-art').src    = song.artwork;
+  document.getElementById('shm-title').textContent  = song.title;
+  document.getElementById('shm-artist').textContent = song.artist;
+  document.getElementById('shm-subheader').textContent = 'Loading…';
+  document.getElementById('shm-body').innerHTML = '';
+
+  const overlay = document.getElementById('song-history-modal');
+  overlay.style.display = 'flex';
+
+  try {
+    const res     = await fetch(`/api/songs/${song.id}/history`);
+    const history = await res.json();
+    renderSongHistoryBody(history);
+  } catch {
+    document.getElementById('shm-body').innerHTML = '<p class="shm-empty">Failed to load history.</p>';
+  }
+}
+
+function renderSongHistoryBody(history) {
+  const n = history.length;
+
+  // Subheader
+  let sub = `${n} attempt${n !== 1 ? 's' : ''}`;
+  if (n > 0) {
+    sub += ` · first tried ${formatHistoryDate(history[0].answered_at)}`;
+    const first3 = history.find(h => h.got_title && h.got_artist && h.got_year);
+    sub += first3 ? ` · known since ${formatHistoryDate(first3.answered_at)}` : ' · known since —';
+  }
+  document.getElementById('shm-subheader').textContent = sub;
+
+  const body = document.getElementById('shm-body');
+
+  if (n === 0) {
+    body.innerHTML = '<p class="shm-empty">No quiz history for this song yet.</p>';
+    return;
+  }
+
+  // Sparkline SVG
+  const fields = ['got_title', 'got_artist', 'got_year'];
+  const labels = ['T', 'A', 'Y'];
+  const r = 5, gap = 14, labelW = 16, rowH = 18, padV = 5;
+  const svgW = labelW + n * gap + r;
+  const svgH = fields.length * rowH + padV * 2;
+
+  let svg = `<svg class="shm-sparkline" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">`;
+  fields.forEach((field, fi) => {
+    const cy = padV + fi * rowH + rowH / 2;
+    svg += `<text x="0" y="${cy + 4}" font-size="10" fill="rgba(255,255,255,0.35)" font-family="inherit">${labels[fi]}</text>`;
+    history.forEach((h, i) => {
+      svg += `<circle cx="${labelW + i * gap + r}" cy="${cy}" r="${r}" fill="${h[field] ? '#1dce96' : '#ff5252'}" opacity="0.85"/>`;
+    });
+  });
+  svg += '</svg>';
+
+  // Table
+  const pill = got => `<span class="result-pill ${got ? 'pill-correct' : 'pill-wrong'}">${got ? '✓' : '✗'}</span>`;
+  let table = `<table class="shm-table">
+    <thead><tr><th>Date</th><th>Title</th><th>Artist</th><th>Year</th></tr></thead><tbody>`;
+  for (const h of history) {
+    table += `<tr>
+      <td class="shm-date">${formatHistoryDate(h.answered_at)}</td>
+      <td>${pill(h.got_title)}</td><td>${pill(h.got_artist)}</td><td>${pill(h.got_year)}</td>
+    </tr>`;
+  }
+  table += '</tbody></table>';
+
+  body.innerHTML = svg + table;
+}
+
+function closeSongHistory() {
+  document.getElementById('song-history-modal').style.display = 'none';
+}
+
 function openModal(startTab) {
   const modal = document.getElementById('import-modal');
   modal.style.display = 'flex';
@@ -1325,6 +1426,18 @@ async function init() {
 
   searchBtn.addEventListener('click', doSearch);
   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  // Song history modal
+  document.getElementById('shm-close').addEventListener('click', closeSongHistory);
+  document.getElementById('song-history-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('song-history-modal')) closeSongHistory();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('song-history-modal').style.display !== 'none') closeSongHistory();
+      else closeModal();
+    }
+  });
 
   // Import modal
   document.getElementById('library-sort').addEventListener('change', e => {

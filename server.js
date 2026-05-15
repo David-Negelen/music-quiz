@@ -264,6 +264,17 @@ function handleGetStats(res) {
   });
 }
 
+function handleGetSongHistory(id, res) {
+  const rows = db.prepare(`
+    SELECT sr.answered_at, sr.got_title, sr.got_artist, sr.got_year, sr.session_id
+    FROM session_results sr
+    JOIN sessions s ON s.id = sr.session_id
+    WHERE sr.song_id = ?
+    ORDER BY sr.answered_at ASC
+  `).all(id);
+  return json(res, 200, rows);
+}
+
 // ── API dispatcher ─────────────────────────────────────────────────────────
 
 async function handleApi(req, res) {
@@ -282,6 +293,7 @@ async function handleApi(req, res) {
     if (id && !sub && method === 'DELETE')                { stmts.deleteSong.run(id); return json(res, 200, { ok: true }); }
     if (id && !sub && method === 'PATCH')                 return handlePatchSong(id, req, res);
     if (id && sub === 'sr' && method === 'PATCH')         return handlePatchSongSR(id, req, res);
+    if (id && sub === 'history' && method === 'GET')      return handleGetSongHistory(id, res);
   }
 
   if (resource === 'sessions') {

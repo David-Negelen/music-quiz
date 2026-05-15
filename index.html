@@ -37,6 +37,7 @@
               <option value="title">Title A–Z</option>
               <option value="artist">Artist A–Z</option>
               <option value="year">Year</option>
+              <option value="knowledge">Weakest first</option>
               <option value="added">Date added</option>
             </select>
             <button id="import-btn" class="btn-ghost btn-sm">Import playlist</button>
@@ -230,6 +231,24 @@
         <button id="import-cancel-btn" class="btn-ghost">Cancel</button>
         <button id="import-run-btn" class="btn-primary">Import</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Song History Modal -->
+  <div id="song-history-modal" class="modal-overlay shm-overlay" style="display:none" aria-modal="true" role="dialog">
+    <div class="modal shm-modal">
+      <div class="modal-header shm-header">
+        <div class="shm-title-row">
+          <img id="shm-art" src="" alt="" class="shm-art" width="32" height="32">
+          <div>
+            <div id="shm-title" class="shm-song-title"></div>
+            <div id="shm-artist" class="shm-song-artist"></div>
+          </div>
+        </div>
+        <button id="shm-close" class="modal-close" aria-label="Close">×</button>
+      </div>
+      <div id="shm-subheader" class="shm-subheader"></div>
+      <div id="shm-body" class="shm-body"></div>
     </div>
   </div>
 
