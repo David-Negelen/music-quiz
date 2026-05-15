@@ -813,6 +813,17 @@ async function runBulkImport(entries) {
     statusEl.textContent = `Searching ${i + 1} / ${entries.length}: ${entry.artist ? entry.artist + ' – ' : ''}${entry.title}`;
     progressFill.style.width = `${((i + 1) / entries.length) * 100}%`;
 
+    // Skip the iTunes lookup entirely if title+artist already match a library entry.
+    const normTitle = normalizeAnswer(entry.title);
+    const normArtist = entry.artist ? normalizeAnswer(entry.artist) : null;
+    if (state.library.some(s => {
+      if (normalizeAnswer(s.title) !== normTitle) return false;
+      return !normArtist || normalizeAnswer(s.artist) === normArtist;
+    })) {
+      skipped++;
+      continue;
+    }
+
     try {
       const song = await searchBestMatch(entry);
       if (song) {
