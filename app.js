@@ -8,7 +8,11 @@ const state = {
   quizScore: 0,
   quizAnswers: [],
   quizConfig: { count: null },
-  preMastery: {}, // mastery snapshot taken before each session
+  preMastery: {},
+  currentSessionId: null,
+  sessionStartTime: 0,
+  historyOffset: 0,
+  librarySort: 'title',
 };
 
 const audio = document.getElementById('preview-audio');
@@ -174,6 +178,10 @@ async function loadLibrary() {
       year:       r.year != null ? String(r.year) : '????',
       artwork:    r.artwork_url || '',
       previewUrl: r.preview_url || '',
+      srInterval: r.sr_interval || 1,
+      srEase:     r.sr_ease     || 2.5,
+      srDue:      r.sr_due      || null,
+      srReviews:  r.sr_reviews  || 0,
     }));
     songStats = {};
     for (const r of rows) {
@@ -197,6 +205,7 @@ function inLibrary(id) {
 
 async function addToLibrary(song) {
   if (inLibrary(song.id)) return;
+  song = await resolveOriginalYear(song);
   state.library.push(song);
   renderLibrary();
   updateLibraryStatus();
@@ -276,6 +285,40 @@ async function searchSongs(query) {
   return results;
 }
 
+async function resolveOriginalYear(song) {
+  if (!/remaster/i.test(song.title)) return song;
+
+  const cleanTitle = song.title
+    .replace(/\s*[\(\[][^\)\]]*remaster[^\)\]]*[\)\]]/gi, '')
+    .replace(/\s*-\s*[^-]*remaster\w*/gi, '')
+    .trim();
+
+  if (!cleanTitle) return song;
+
+  try {
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle + ' ' + song.artist)}&media=music&entity=song&limit=50`;
+    const res = await fetch(url);
+    if (!res.ok) return song;
+    const data = await res.json();
+
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const titleNorm  = norm(cleanTitle);
+    const artistNorm = norm(song.artist);
+
+    const years = (data.results || [])
+      .filter(r => r.releaseDate && norm(r.trackName) === titleNorm && norm(r.artistName) === artistNorm)
+      .map(r => parseInt(r.releaseDate.slice(0, 4)))
+      .filter(y => !isNaN(y));
+
+    if (years.length > 0) {
+      const earliest = Math.min(...years);
+      if (earliest < parseInt(song.year)) return { ...song, year: String(earliest) };
+    }
+  } catch {}
+
+  return song;
+}
+
 // ── Study Session ─────────────────────────────────────────────────────────
 
 const TYPE_LABELS = { title: 'Song title', artist: 'Artist', year: 'Release year' };
@@ -291,23 +334,18 @@ function shuffle(arr) {
 
 function buildStudySession() {
   const { count } = state.quizConfig;
+  const today = new Date().toISOString().slice(0, 10);
 
-  const groups = { unheard: [], s0: [], s1: [], s2: [], s3: [] };
-  state.library.forEach(s => groups[getMastery(s.id)].push(s));
+  const overdue = [], fresh = [], notDue = [];
+  for (const song of state.library) {
+    if (!song.srDue)            fresh.push(song);
+    else if (song.srDue <= today) overdue.push(song);
+    else                        notDue.push(song);
+  }
+  overdue.sort((a, b) => (a.srDue < b.srDue ? -1 : 1));
+  notDue.sort((a, b)  => (a.srDue < b.srDue ? -1 : 1));
 
-  // Priority order: unheard → 0/3 → 1/3 → 2/3, then sprinkle in 3/3 for review
-  const weak = [
-    ...shuffle(groups.unheard),
-    ...shuffle(groups.s0),
-    ...shuffle(groups.s1),
-    ...shuffle(groups.s2),
-  ];
-  const reviewCount = weak.length === 0
-    ? groups.s3.length
-    : Math.min(groups.s3.length, Math.max(groups.s3.length > 0 ? 1 : 0, Math.round(weak.length / 3)));
-  const masteredSample = shuffle(groups.s3).slice(0, reviewCount);
-
-  let songs = [...weak, ...shuffle(masteredSample)];
+  let songs = [...overdue, ...fresh, ...notDue];
   if (count !== null && count < songs.length) songs = songs.slice(0, count);
   if (!songs.length) return null;
 
@@ -422,7 +460,13 @@ function renderLibrary() {
     return;
   }
   empty.style.display = 'none';
-  list.innerHTML = state.library.map((song) => {
+  const sorted = [...state.library].sort((a, b) => {
+    if (state.librarySort === 'artist') return a.artist.localeCompare(b.artist);
+    if (state.librarySort === 'year')   return (a.year || 0) - (b.year || 0);
+    if (state.librarySort === 'added')  return 0; // DB returns newest-first already
+    return a.title.localeCompare(b.title); // default: title
+  });
+  list.innerHTML = sorted.map((song) => {
     const fm = getFieldMastery(song.id);
     const mark = s => s === 'known' ? '✓' : '✗';
     const tooltip = `Title ${mark(fm.title)} · Artist ${mark(fm.artist)} · Year ${mark(fm.year)}`;
@@ -451,28 +495,16 @@ function renderMasteryOverview() {
   const el = document.getElementById('mastery-overview');
   if (!el) return;
   if (!state.library.length) { el.innerHTML = ''; return; }
-  const counts = getMasteryStats();
-  const songPills = [
-    ['s3', '★'],
-    ['s2', '◑'],
-    ['s1', '◔'],
-    ['s0', '✗'],
-    ['unheard', '○'],
-  ]
-    .filter(([level]) => counts[level] > 0)
-    .map(([level, icon]) =>
-      `<span class="mastery-pill mastery-pill-${level}">${icon} ${counts[level]} ${MASTERY_LABEL[level]}</span>`
-    )
-    .join('');
 
-  const fas = getFieldAccuracyStats();
-  const fieldPills = [['title', 'T'], ['artist', 'A'], ['year', 'Y']]
-    .map(([type, label]) =>
-      `<span class="mastery-pill mastery-pill-field">${label} ${fas[type] !== null ? fas[type] + '%' : '--'}</span>`
-    )
-    .join('');
+  const today = new Date().toISOString().slice(0, 10);
+  let due = 0, fresh = 0, notDue = 0;
+  for (const s of state.library) {
+    if (!s.srDue)              fresh++;
+    else if (s.srDue <= today) due++;
+    else                       notDue++;
+  }
 
-  el.innerHTML = `<div class="mastery-row">${songPills}</div><div class="mastery-row">${fieldPills}</div>`;
+  el.innerHTML = `<p class="sr-due-line">Due today: <span class="sr-due-count">${due}</span> &nbsp;·&nbsp; New: <span class="sr-due-count">${fresh}</span> &nbsp;·&nbsp; Not due: <span class="sr-due-count">${notDue}</span></p>`;
 }
 
 function updateLibraryStatus() {
@@ -660,79 +692,326 @@ function handleAnswer() {
   document.getElementById('next-btn').style.display = 'block';
 }
 
-function advanceQuiz() {
+async function advanceQuiz() {
+  const idx = state.quizIndex;
+  const q   = state.quizQuestions[idx];
+  const ans = state.quizAnswers[idx];
+
+  if (ans) {
+    const correctCount = Object.values(ans.correct).filter(Boolean).length;
+    applySmTwo(q.song, correctCount);
+
+    if (state.currentSessionId) {
+      fetch(`/api/sessions/${state.currentSessionId}/results`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          song_id:    q.song.id,
+          got_title:  ans.correct.title  ? 1 : 0,
+          got_artist: ans.correct.artist ? 1 : 0,
+          got_year:   ans.correct.year   ? 1 : 0,
+        }),
+      }).catch(() => {});
+    }
+  }
+
   state.quizIndex++;
   if (state.quizIndex >= state.quizQuestions.length) {
-    showResults();
+    await closeSession();
+    showReview();
   } else {
     renderQuestion();
   }
 }
 
-// ── Results ───────────────────────────────────────────────────────────────
+function applySmTwo(song, correctCount) {
+  const q = correctCount === 3 ? 5 : correctCount === 2 ? 3 : correctCount === 1 ? 2 : 1;
 
-function showResults() {
+  let interval = song.srInterval || 1;
+  let ease     = song.srEase     || 2.5;
+  let reviews  = song.srReviews  || 0;
+
+  let newInterval, newEase, newReviews;
+  if (q >= 3) {
+    if      (reviews === 0) newInterval = 1;
+    else if (reviews === 1) newInterval = 6;
+    else                    newInterval = Math.round(interval * ease);
+    newEase    = Math.max(1.3, ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+    newReviews = reviews + 1;
+  } else {
+    newInterval = 1;
+    newEase     = ease;
+    newReviews  = 0;
+  }
+
+  const due = new Date();
+  due.setDate(due.getDate() + newInterval);
+  const newDue = due.toISOString().slice(0, 10);
+
+  song.srInterval = newInterval;
+  song.srEase     = newEase;
+  song.srReviews  = newReviews;
+  song.srDue      = newDue;
+
+  fetch(`/api/songs/${song.id}/sr`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sr_interval: newInterval, sr_ease: newEase, sr_due: newDue, sr_reviews: newReviews }),
+  }).catch(() => {});
+}
+
+function closeSession() {
+  if (!state.currentSessionId) return Promise.resolve();
+  const answers = state.quizAnswers;
+  return fetch(`/api/sessions/${state.currentSessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ended_at:       new Date().toISOString(),
+      song_count:     answers.length,
+      correct_title:  answers.filter(a => a.correct.title).length,
+      correct_artist: answers.filter(a => a.correct.artist).length,
+      correct_year:   answers.filter(a => a.correct.year).length,
+    }),
+  }).catch(() => {});
+}
+
+// ── Review (post-session screen) ──────────────────────────────────────────
+
+function showReview() {
   showView('results');
 
-  const correct = state.quizAnswers.reduce((sum, a) => sum + Object.values(a.correct).filter(Boolean).length, 0);
-  const total = state.quizAnswers.length * 3;
-  const pct = Math.round((correct / total) * 100);
+  const answers = state.quizAnswers;
+  const elapsed = Math.round((Date.now() - state.sessionStartTime) / 60000);
+  const n = answers.length;
 
-  // Count mastery improvements during this session
-  const masteryOrder = { unheard: 0, s0: 1, s1: 2, s2: 3, s3: 4 };
-  let improved = 0, newlyComplete = 0;
-  const seenSongs = new Set();
-  state.quizQuestions.forEach(q => {
-    const id = String(q.song.id);
-    if (seenSongs.has(id)) return;
-    seenSongs.add(id);
-    const before = state.preMastery[id] || 'unheard';
-    const after = getMastery(q.song.id);
-    if (masteryOrder[after] > masteryOrder[before]) {
-      improved++;
-      if (after === 's3') newlyComplete++;
-    }
-  });
+  document.getElementById('review-subtitle').textContent =
+    `${n} song${n !== 1 ? 's' : ''} · ${elapsed} min`;
 
-  const emoji = pct >= 90 ? '🏆' : pct >= 70 ? '🎵' : pct >= 50 ? '🎶' : '🎸';
-  document.getElementById('results-emoji').textContent = emoji;
-  document.getElementById('results-score').textContent = `${correct} / ${total}`;
+  const totals = { title: 0, artist: 0, year: 0 };
+  for (const a of answers) {
+    for (const t of ['title', 'artist', 'year']) if (a.correct[t]) totals[t]++;
+  }
 
-  const byType = { title: { correct: 0, total: 0 }, artist: { correct: 0, total: 0 }, year: { correct: 0, total: 0 } };
-  state.quizAnswers.forEach(a => {
-    for (const type of ['title', 'artist', 'year']) {
-      byType[type].total++;
-      if (a.correct[type]) byType[type].correct++;
-    }
-  });
-  const masteryAfter = getMasteryStats();
-  const masteryIcons = { s3: '★', s2: '◑', s1: '◔', s0: '✗', unheard: '○' };
+  document.getElementById('review-stat-boxes').innerHTML = `
+    <div class="review-stat-box"><span class="review-stat-num">${totals.title}/${n}</span><span class="review-stat-label">Title</span></div>
+    <div class="review-stat-box"><span class="review-stat-num">${totals.artist}/${n}</span><span class="review-stat-label">Artist</span></div>
+    <div class="review-stat-box"><span class="review-stat-num">${totals.year}/${n}</span><span class="review-stat-label">Year</span></div>
+  `;
 
-  const libraryProgress = ['s3', 's2', 's1', 's0', 'unheard']
-    .filter(l => masteryAfter[l] > 0)
-    .map(l => `${masteryIcons[l]} ${masteryAfter[l]}`)
-    .join('  ');
+  const allGood = answers.filter(a => a.correct.title && a.correct.artist && a.correct.year);
+  const missed  = answers.filter(a => !(a.correct.title && a.correct.artist && a.correct.year));
 
-  const breakdown = document.getElementById('results-breakdown');
-  breakdown.innerHTML = `
-    <div class="breakdown-row">
-      <span>Accuracy</span>
-      <span>${pct}%</span>
-    </div>
-    ${improved > 0 ? `
-    <div class="breakdown-row">
-      <span>Songs improved</span>
-      <span class="correct-row">${improved}${newlyComplete > 0 ? ` · ${newlyComplete} fully learned` : ''}</span>
-    </div>` : ''}
-    ${Object.entries(byType).map(([type, stat]) => `
-    <div class="breakdown-row">
-      <span>${TYPE_LABELS[type] || type}</span>
-      <span>${stat.correct} / ${stat.total}</span>
-    </div>`).join('')}
-    <div class="breakdown-row">
-      <span>Library progress</span>
-      <span class="mastery-summary">${libraryProgress}</span>
+  const songRow = a => `
+    <div class="review-song-row">
+      <img src="${esc(a.song.artwork)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" width="32" height="32">
+      <div class="review-song-info">
+        <div class="review-song-title">${esc(a.song.title)}</div>
+        <div class="review-song-sub">${esc(a.song.artist)}</div>
+      </div>
+      <span class="review-dots">
+        <span class="review-dot ${a.correct.title  ? 'got' : 'miss'}"></span>
+        <span class="review-dot ${a.correct.artist ? 'got' : 'miss'}"></span>
+        <span class="review-dot ${a.correct.year   ? 'got' : 'miss'}"></span>
+      </span>
     </div>`;
+
+  let html = '';
+  if (missed.length) {
+    html += `<div class="review-group">
+      <div class="review-group-label">Missed something &middot; ${missed.length}</div>
+      ${missed.map(songRow).join('')}
+    </div>`;
+  }
+  if (allGood.length) {
+    html += `<details class="review-group">
+      <summary class="review-group-label">Got all 3 &middot; ${allGood.length}</summary>
+      ${allGood.map(songRow).join('')}
+    </details>`;
+  }
+
+  document.getElementById('review-song-list').innerHTML = html || '<p class="hint" style="padding:12px 14px">No songs this session.</p>';
+}
+
+// ── Stats page ────────────────────────────────────────────────────────────
+
+async function renderStats() {
+  let data;
+  try {
+    const res = await fetch('/api/stats');
+    data = await res.json();
+  } catch {
+    document.getElementById('stats-overview').innerHTML = '<p class="hint">Could not load stats.</p>';
+    return;
+  }
+
+  document.getElementById('stats-overview').innerHTML = `
+    <div class="stat-chip"><span class="stat-num">${data.totalSongs}</span><span class="stat-label">Songs</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.sessionsPlayed}</span><span class="stat-label">Sessions</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.uniqueReviewed}</span><span class="stat-label">Reviewed</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.avgSessionSize}</span><span class="stat-label">Avg size</span></div>
+  `;
+
+  const kn = data.knowledge;
+  const total = Math.max(kn.total, 1);
+  document.getElementById('stats-knowledge').innerHTML = ['title', 'artist', 'year'].map(t => {
+    const known = kn[t] || 0;
+    const pct   = Math.round((known / total) * 100);
+    return `<div class="knowledge-bar-row">
+      <span class="knowledge-bar-label">${t.charAt(0).toUpperCase() + t.slice(1)}</span>
+      <div class="knowledge-bar-track"><div class="knowledge-bar-fill" style="width:${pct}%"></div></div>
+      <span class="knowledge-bar-pct">${pct}%</span>
+      <span class="knowledge-bar-sub">${known} of ${kn.total}</span>
+    </div>`;
+  }).join('');
+
+  if (data.hardestSongs.length) {
+    document.getElementById('stats-hardest').innerHTML = data.hardestSongs.map(s => {
+      const fm = {
+        title:  s.attempts_title  > 0 ? (s.score_title  >= 1 && s.score_title  / s.attempts_title  >= 0.5 ? 'known' : 'wrong') : 'unheard',
+        artist: s.attempts_artist > 0 ? (s.score_artist >= 1 && s.score_artist / s.attempts_artist >= 0.5 ? 'known' : 'wrong') : 'unheard',
+        year:   s.attempts_year   > 0 ? (s.score_year   >= 1 && s.score_year   / s.attempts_year   >= 0.5 ? 'known' : 'wrong') : 'unheard',
+      };
+      return `<div class="song-row">
+        <img src="${esc(s.artwork_url || '')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div class="song-row-info">
+          <div class="song-row-title">${esc(s.title)}</div>
+          <div class="song-row-sub">${esc(s.artist)}</div>
+        </div>
+        <span class="mastery-dots">
+          <span class="mastery-dot-field mastery-field-${fm.title}"></span>
+          <span class="mastery-dot-field mastery-field-${fm.artist}"></span>
+          <span class="mastery-dot-field mastery-field-${fm.year}"></span>
+        </span>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('stats-hardest').innerHTML = '<p class="hint" style="padding:8px 0">No data yet — play some sessions first.</p>';
+  }
+
+  document.getElementById('stats-streak').innerHTML = `
+    <div class="streak-display">
+      <span class="streak-num">${data.bestStreak}</span>
+      <span class="streak-label">day${data.bestStreak !== 1 ? 's' : ''} best streak</span>
+    </div>`;
+
+  setTimeout(() => drawSessionsChart(data.recentSessions), 0);
+
+  state.historyOffset = 0;
+  await loadSessionHistory(false);
+}
+
+function drawSessionsChart(sessions) {
+  const canvas = document.getElementById('stats-chart');
+  if (!canvas) return;
+  const reversed = [...sessions].reverse();
+  if (!reversed.length) { canvas.style.display = 'none'; return; }
+  canvas.style.display = 'block';
+
+  const dpr = window.devicePixelRatio || 1;
+  const W   = canvas.offsetWidth || 620;
+  const H   = 80;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const maxCount = Math.max(...reversed.map(s => s.song_count || 0), 1);
+  const n = reversed.length;
+  const gap  = 3;
+  const barW = Math.max(4, (W - gap * (n + 1)) / n);
+
+  reversed.forEach((s, i) => {
+    const correct  = (s.correct_title || 0) + (s.correct_artist || 0) + (s.correct_year || 0);
+    const possible = (s.song_count || 0) * 3;
+    const pct  = possible > 0 ? correct / possible : 0;
+    const barH = Math.max(2, ((s.song_count || 0) / maxCount) * (H - 8));
+    const x    = gap + i * (barW + gap);
+    const y    = H - barH;
+
+    ctx.fillStyle = `rgba(29, 206, 150, ${0.25 + pct * 0.75})`;
+    ctx.fillRect(x, y, barW, barH);
+  });
+}
+
+async function loadSessionHistory(append) {
+  const container   = document.getElementById('stats-history');
+  const loadMoreBtn = document.getElementById('stats-load-more');
+  if (!container) return;
+
+  try {
+    const res = await fetch(`/api/sessions?limit=10&offset=${state.historyOffset}`);
+    const { rows, total } = await res.json();
+
+    if (!append) container.innerHTML = '';
+
+    if (!rows.length && !append) {
+      container.innerHTML = '<p class="hint" style="padding:8px 0">No sessions yet.</p>';
+      loadMoreBtn.style.display = 'none';
+      return;
+    }
+
+    for (const session of rows) {
+      const el  = document.createElement('div');
+      el.className  = 'history-session';
+      el.dataset.id = session.id;
+
+      const raw     = session.started_at.includes('Z') ? session.started_at : session.started_at.replace(' ', 'T') + 'Z';
+      const dt      = new Date(raw);
+      const dateStr = dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) +
+        ' · ' + dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const n    = session.song_count || 0;
+      const tPct = n ? Math.round(((session.correct_title  || 0) / n) * 100) : 0;
+      const aPct = n ? Math.round(((session.correct_artist || 0) / n) * 100) : 0;
+      const yPct = n ? Math.round(((session.correct_year   || 0) / n) * 100) : 0;
+
+      el.innerHTML = `
+        <div class="history-session-header">
+          <span class="history-date">${dateStr}</span>
+          <span class="history-summary">${n} songs &nbsp;·&nbsp; T ${tPct}% &nbsp;A ${aPct}% &nbsp;Y ${yPct}%</span>
+        </div>
+        <div class="history-session-detail" style="display:none"></div>`;
+      el.querySelector('.history-session-header').addEventListener('click', () => toggleHistorySession(el));
+      container.appendChild(el);
+    }
+
+    state.historyOffset += rows.length;
+    loadMoreBtn.style.display = state.historyOffset < total ? 'block' : 'none';
+  } catch {
+    if (!append) container.innerHTML = '<p class="hint">Could not load history.</p>';
+  }
+}
+
+async function toggleHistorySession(el) {
+  const detail = el.querySelector('.history-session-detail');
+  const isOpen = detail.style.display !== 'none';
+  if (isOpen) { detail.style.display = 'none'; return; }
+
+  detail.style.display = 'block';
+  if (detail.dataset.loaded) return;
+  detail.dataset.loaded = '1';
+  detail.innerHTML = '<p class="hint" style="padding:8px 14px">Loading…</p>';
+
+  try {
+    const res     = await fetch(`/api/sessions/${el.dataset.id}/results`);
+    const results = await res.json();
+    if (!results.length) { detail.innerHTML = '<p class="hint" style="padding:8px 14px">No results.</p>'; return; }
+    detail.innerHTML = results.map(r => `
+      <div class="review-song-row">
+        <img src="${esc(r.artwork_url || '')}" alt="" width="32" height="32" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div class="review-song-info">
+          <div class="review-song-title">${esc(r.title)}</div>
+          <div class="review-song-sub">${esc(r.artist)}</div>
+        </div>
+        <span class="review-dots">
+          <span class="review-dot ${r.got_title  ? 'got' : 'miss'}"></span>
+          <span class="review-dot ${r.got_artist ? 'got' : 'miss'}"></span>
+          <span class="review-dot ${r.got_year   ? 'got' : 'miss'}"></span>
+        </span>
+      </div>`).join('');
+  } catch {
+    detail.innerHTML = '<p class="hint" style="padding:8px 14px">Failed to load.</p>';
+  }
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────
@@ -935,7 +1214,7 @@ function handleImportRun() {
 
 // ── Event Wiring ──────────────────────────────────────────────────────────
 
-function startSession() {
+async function startSession() {
   const setupError = document.getElementById('setup-error');
 
   if (state.library.length < 2) {
@@ -950,8 +1229,6 @@ function startSession() {
   const count = studyAll ? null : parseInt(document.getElementById('q-count').textContent, 10);
 
   state.quizConfig = { count };
-
-  // Snapshot mastery before session so results can show improvements
   state.preMastery = {};
   state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
 
@@ -959,6 +1236,15 @@ function startSession() {
   state.quizIndex = 0;
   state.quizScore = 0;
   state.quizAnswers = [];
+
+  try {
+    const r = await fetch('/api/sessions', { method: 'POST' });
+    const d = await r.json();
+    state.currentSessionId = d.id;
+  } catch {
+    state.currentSessionId = null;
+  }
+  state.sessionStartTime = Date.now();
 
   showView('quiz-active');
   renderQuestion();
@@ -1008,6 +1294,7 @@ async function init() {
     btn.addEventListener('click', () => {
       showView(btn.dataset.view);
       if (btn.dataset.view === 'quiz-setup') renderMasteryOverview();
+      if (btn.dataset.view === 'stats')      renderStats();
     });
   });
 
@@ -1040,6 +1327,11 @@ async function init() {
   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
   // Import modal
+  document.getElementById('library-sort').addEventListener('change', e => {
+    state.librarySort = e.target.value;
+    renderLibrary();
+  });
+
   document.getElementById('import-btn').addEventListener('click', () => openModal());
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('import-cancel-btn').addEventListener('click', closeModal);
@@ -1124,20 +1416,22 @@ async function init() {
   // Next question
   document.getElementById('next-btn').addEventListener('click', advanceQuiz);
 
-  // Results actions
-  document.getElementById('retry-btn').addEventListener('click', () => {
-    state.preMastery = {};
-    state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
-    state.quizQuestions = buildStudySession();
-    state.quizIndex = 0;
-    state.quizScore = 0;
-    state.quizAnswers = [];
-    showView('quiz-active');
-    renderQuestion();
+  // End session early
+  document.getElementById('end-session-btn').addEventListener('click', async () => {
+    stopAudio();
+    await closeSession();
+    showReview();
   });
 
-  document.getElementById('back-library-btn').addEventListener('click', () => {
-    showView('library');
+  // Review screen
+  document.getElementById('back-quiz-btn').addEventListener('click', () => {
+    renderMasteryOverview();
+    showView('quiz-setup');
+  });
+
+  // Stats history — load more
+  document.getElementById('stats-load-more').addEventListener('click', () => {
+    loadSessionHistory(true);
   });
 }
 

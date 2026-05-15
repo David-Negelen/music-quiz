@@ -12,6 +12,7 @@
       <div class="app-title">Musik Quiz</div>
       <nav class="app-nav">
         <button class="nav-btn active" data-view="library">Library</button>
+        <button class="nav-btn" data-view="stats">Stats</button>
         <button class="nav-btn" data-view="quiz-setup">Quiz</button>
       </nav>
     </header>
@@ -32,6 +33,12 @@
         <div class="library-header">
           <h2>My Library <span id="library-count" class="badge">0</span></h2>
           <div class="library-actions">
+            <select id="library-sort" class="library-sort-select">
+              <option value="title">Title A–Z</option>
+              <option value="artist">Artist A–Z</option>
+              <option value="year">Year</option>
+              <option value="added">Date added</option>
+            </select>
             <button id="import-btn" class="btn-ghost btn-sm">Import playlist</button>
           </div>
         </div>
@@ -78,6 +85,7 @@
           <div class="quiz-progress-bar"><div id="quiz-progress-fill" class="quiz-progress-fill"></div></div>
         </div>
         <span id="quiz-score" class="quiz-score-display">0 pts</span>
+        <button id="end-session-btn" class="btn-ghost btn-sm end-session-btn" title="End session">End</button>
       </div>
 
       <div class="quiz-card">
@@ -131,16 +139,42 @@
       </div>
     </section>
 
-    <!-- Results View -->
+    <!-- Review View (post-session) -->
     <section id="view-results" class="view">
-      <div class="results-card">
-        <div id="results-emoji" class="results-emoji"></div>
-        <h2 id="results-title">Session Complete!</h2>
-        <div id="results-score" class="results-score-big"></div>
-        <div id="results-breakdown" class="results-breakdown"></div>
-        <div class="results-actions">
-          <button id="retry-btn" class="btn-primary btn-lg">Study Again</button>
-          <button id="back-library-btn" class="btn-ghost btn-lg">Edit Library</button>
+      <div class="review-card">
+        <div class="review-header">
+          <h2>Session complete</h2>
+          <p id="review-subtitle" class="review-subtitle"></p>
+        </div>
+        <div id="review-stat-boxes" class="review-stat-boxes"></div>
+        <div id="review-song-list" class="review-song-list"></div>
+        <div class="review-footer">
+          <button id="back-quiz-btn" class="btn-primary btn-lg">Back to Quiz</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats View -->
+    <section id="view-stats" class="view">
+      <div class="stats-page">
+        <div id="stats-overview" class="stats-overview-row"></div>
+        <div class="stats-section">
+          <h3 class="stats-section-title">Knowledge</h3>
+          <div id="stats-knowledge"></div>
+        </div>
+        <div class="stats-section">
+          <h3 class="stats-section-title">Hardest songs</h3>
+          <div id="stats-hardest"></div>
+        </div>
+        <div class="stats-section stats-section--activity">
+          <h3 class="stats-section-title">Activity</h3>
+          <div id="stats-streak" class="stats-streak"></div>
+          <canvas id="stats-chart" class="stats-chart"></canvas>
+        </div>
+        <div class="stats-section">
+          <h3 class="stats-section-title">Past sessions</h3>
+          <div id="stats-history"></div>
+          <button id="stats-load-more" class="btn-ghost btn-sm stats-load-more" style="display:none">Load more</button>
         </div>
       </div>
     </section>

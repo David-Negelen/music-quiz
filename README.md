@@ -1,44 +1,45 @@
 # Musik Quiz
 
-A browser-based music learning app. Listen to 30-second previews from iTunes and type the title, artist, and release year. Your performance is tracked per song so the weakest ones always come up first.
+A browser-based music learning app. Listen to 30-second iTunes previews and type the title, artist, and release year from memory. A spaced repetition algorithm schedules when each song comes back so you study what you need most.
 
 ## Running
 
-No build step needed. Serve the folder over HTTP — the Web Audio API and iTunes search both require `http://`, not `file://`.
-
-**With auto-reload on file save (recommended for development):**
 ```sh
-npm run dev
+npm start
 ```
-Opens http://localhost:8080 and reloads automatically whenever you save a file.
 
-**Plain Python server (no auto-reload):**
-```sh
-python3 -m http.server 8080
-```
-Then open [http://localhost:8080](http://localhost:8080).
+Opens at [http://localhost:3000](http://localhost:3000). The server handles both the API and static file serving — no separate build step or dev server needed.
 
-## How it works
+## Tabs
 
-1. **Library tab** — search for songs via the iTunes Search API and add them. Import a whole playlist at once via paste or an Apple Music `.txt` export (File → Export Playlist… → save as `.txt`).
+**Library** — search for songs via the iTunes Search API and add them. Import a whole playlist at once by pasting `Artist - Title` lines or uploading an Apple Music `.txt` export (Music.app → File → Export Playlist… → save as `.txt`). Each song shows three coloured dots for Title / Artist / Year knowledge.
 
-2. **Quiz tab** — start a study session. By default it goes through *all* songs, weakest first. Uncheck "All songs" to limit the batch size.
+**Stats** — an overview of your library and study history: knowledge bars per field, hardest songs by accuracy, best consecutive-day streak, a bar chart of recent sessions, and a scrollable session history you can expand song-by-song.
 
-3. **Answering** — a 30-second preview plays automatically. Type your answer and press Enter or click Check. Year answers must be exact; title/artist answers are case-insensitive and ignore punctuation and a leading "The".
+**Quiz** — start a study session. Songs are served in spaced repetition order: overdue first, then new, then not yet due. Uncheck "All songs" to cap the batch size.
 
-## Mastery levels
+## Answering
 
-Each song is rated based on your correct/attempt ratio across all three question types:
+A 30-second preview plays automatically. Type in all three fields and click Check (or press Enter). Year answers must be exact; title and artist answers are case-insensitive, ignore punctuation, and treat a leading "The" as optional. After checking, the correct answers appear inline and the Next button advances to the next song.
 
-| Dot | Level    | Condition                       |
-|-----|----------|---------------------------------|
-| ○   | New      | Never attempted                 |
-| ◔   | Learning | < 55% correct                   |
-| ◑   | Familiar | 55 – 84% correct                |
-| ✓   | Mastered | ≥ 85% correct with ≥ 4 attempts |
+After the last song a **Review** screen shows per-field totals, a grouped list of everything you played, and the Back to Quiz button.
 
-Mastery dots are visible in the Library. The study session always surfaces New and Learning songs before Familiar and Mastered ones.
+## Spaced repetition (SM-2)
+
+After each song the app computes a quality score based on how many fields you got right, then applies the SM-2 algorithm:
+
+| Correct fields | Quality |
+|---|---|
+| 3 / 3 | 5 |
+| 2 / 3 | 3 |
+| 1 / 3 | 2 |
+| 0 / 3 | 1 |
+
+- Quality ≥ 3: interval grows (1 day → 6 days → interval × ease factor), ease factor adjusts upward.
+- Quality < 3: interval resets to 1 day, review count resets to 0.
+
+The due date is stored per song and survives restarts. The Quiz Setup screen shows how many songs are due today, how many are new (never reviewed), and how many aren't due yet.
 
 ## Data
 
-Everything (library and stats) is stored in `localStorage` — nothing is sent anywhere except the iTunes search queries.
+All data is stored in `db.sqlite` in the project root (gitignored). Nothing is sent to any server except iTunes search queries.
