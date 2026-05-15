@@ -92,22 +92,18 @@ function isAnswerCorrect(userInput, correct, type) {
 
 let songStats = {};
 
-function loadStats() {
-  try { songStats = JSON.parse(localStorage.getItem('musikquiz_stats') || '{}'); }
-  catch { songStats = {}; }
-}
-
-function saveStats() {
-  localStorage.setItem('musikquiz_stats', JSON.stringify(songStats));
-}
-
 function recordAnswer(id, type, correct) {
   const key = String(id);
   if (!songStats[key]) songStats[key] = {};
   if (!songStats[key][type]) songStats[key][type] = { a: 0, c: 0 };
   songStats[key][type].a++;
   if (correct) songStats[key][type].c++;
-  saveStats();
+  const st = songStats[key][type];
+  fetch(`/api/songs/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [`score_${type}`]: st.c, [`attempts_${type}`]: st.a }),
+  }).catch(() => {});
 }
 
 // Mastery: 'unheard' | 's0' | 's1' | 's2' | 's3'
@@ -167,27 +163,41 @@ function getFieldAccuracyStats() {
 
 // ── Persistence ───────────────────────────────────────────────────────────
 
-function loadLibrary() {
+async function loadLibrary() {
   try {
-    state.library = JSON.parse(localStorage.getItem('musikquiz_library') || '[]');
+    const res = await fetch('/api/songs');
+    const rows = await res.json();
+    state.library = rows.map(r => ({
+      id:         r.id,
+      title:      r.title,
+      artist:     r.artist,
+      year:       r.year != null ? String(r.year) : '????',
+      artwork:    r.artwork_url || '',
+      previewUrl: r.preview_url || '',
+    }));
+    songStats = {};
+    for (const r of rows) {
+      if (r.attempts_title || r.attempts_artist || r.attempts_year) {
+        songStats[r.id] = {
+          title:  { a: r.attempts_title  || 0, c: r.score_title  || 0 },
+          artist: { a: r.attempts_artist || 0, c: r.score_artist || 0 },
+          year:   { a: r.attempts_year   || 0, c: r.score_year   || 0 },
+        };
+      }
+    }
   } catch {
     state.library = [];
+    songStats = {};
   }
-  loadStats();
-}
-
-function saveLibrary() {
-  localStorage.setItem('musikquiz_library', JSON.stringify(state.library));
 }
 
 function inLibrary(id) {
   return state.library.some(s => s.id === id);
 }
 
-function addToLibrary(song) {
+async function addToLibrary(song) {
   if (inLibrary(song.id)) return;
   state.library.push(song);
-  saveLibrary();
   renderLibrary();
   updateLibraryStatus();
   document.querySelectorAll(`.add-btn[data-id="${song.id}"]`).forEach(btn => {
@@ -195,13 +205,27 @@ function addToLibrary(song) {
     btn.disabled = true;
     btn.title = 'Added';
   });
+  try {
+    await fetch('/api/songs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(song),
+    });
+  } catch {
+    state.library = state.library.filter(s => s.id !== song.id);
+    renderLibrary();
+    updateLibraryStatus();
+    document.querySelectorAll(`.add-btn[data-id="${song.id}"]`).forEach(btn => {
+      btn.classList.remove('added');
+      btn.disabled = false;
+      btn.title = 'Add to library';
+    });
+  }
 }
 
-function removeFromLibrary(id) {
+async function removeFromLibrary(id) {
   state.library = state.library.filter(s => s.id !== id);
   delete songStats[String(id)];
-  saveLibrary();
-  saveStats();
   renderLibrary();
   updateLibraryStatus();
   document.querySelectorAll(`.add-btn[data-id="${id}"]`).forEach(btn => {
@@ -209,6 +233,7 @@ function removeFromLibrary(id) {
     btn.disabled = false;
     btn.title = 'Add to library';
   });
+  await fetch(`/api/songs/${id}`, { method: 'DELETE' }).catch(() => {});
 }
 
 // ── iTunes Search API ─────────────────────────────────────────────────────
@@ -399,8 +424,8 @@ function renderLibrary() {
   empty.style.display = 'none';
   list.innerHTML = state.library.map((song) => {
     const fm = getFieldMastery(song.id);
-    const mark = s => s === 'known' ? '✓' : s === 'wrong' ? '✗' : '○';
-    const tooltip = `Title ${mark(fm.title)}  Artist ${mark(fm.artist)}  Year ${mark(fm.year)}`;
+    const mark = s => s === 'known' ? '✓' : '✗';
+    const tooltip = `Title ${mark(fm.title)} · Artist ${mark(fm.artist)} · Year ${mark(fm.year)}`;
     return `
     <div class="song-row">
       <img src="${song.artwork}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
@@ -928,8 +953,42 @@ function startSession() {
   renderQuestion();
 }
 
-function init() {
-  loadLibrary();
+async function init() {
+  await loadLibrary();
+
+  // One-time migration: if the DB is empty and localStorage has songs, import them.
+  if (state.library.length === 0) {
+    const localLib = JSON.parse(localStorage.getItem('musikquiz_library') || '[]');
+    if (localLib.length) {
+      const localStats = JSON.parse(localStorage.getItem('musikquiz_stats') || '{}');
+      for (const song of localLib) {
+        await fetch('/api/songs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(song),
+        }).catch(() => {});
+        const id = String(song.id);
+        if (localStats[id]) {
+          const patch = {};
+          for (const type of ['title', 'artist', 'year']) {
+            const st = localStats[id][type];
+            if (st) { patch[`score_${type}`] = st.c || 0; patch[`attempts_${type}`] = st.a || 0; }
+          }
+          if (Object.keys(patch).length) {
+            await fetch(`/api/songs/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(patch),
+            }).catch(() => {});
+          }
+        }
+      }
+      localStorage.removeItem('musikquiz_library');
+      localStorage.removeItem('musikquiz_stats');
+      await loadLibrary();
+    }
+  }
+
   renderLibrary();
   updateLibraryStatus();
 
@@ -1017,23 +1076,6 @@ function init() {
     handleFile(e.dataTransfer.files[0]);
   });
 
-  // Clear library
-  document.getElementById('clear-library-btn').addEventListener('click', () => {
-    if (!state.library.length) return;
-    if (confirm(`Remove all ${state.library.length} songs from your library?`)) {
-      state.library = [];
-      songStats = {};
-      saveLibrary();
-      saveStats();
-      renderLibrary();
-      updateLibraryStatus();
-      document.querySelectorAll('.add-btn.added').forEach(btn => {
-        btn.classList.remove('added');
-        btn.disabled = false;
-        btn.innerHTML = '<span>+</span>';
-      });
-    }
-  });
 
   // Songs per session picker
   let qCount = 10;
