@@ -6,6 +6,7 @@ const state = {
   quizQuestions: [],
   quizIndex: 0,
   quizScore: 0,
+  quizStreak: 0,
   quizAnswers: [],
   quizConfig: { count: null },
   preMastery: {},
@@ -677,6 +678,8 @@ function handleAnswer() {
 
   const correctCount = Object.values(correct).filter(Boolean).length;
   state.quizScore += correctCount * 10;
+  if (correctCount === 3) { state.quizStreak++; fireConfetti(); } else { state.quizStreak = 0; }
+  updateStreakDisplay();
   state.quizAnswers.push({ song: q.song, correct });
 
   for (const type of ['title', 'artist', 'year']) {
@@ -1041,6 +1044,68 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
+function updateStreakDisplay() {
+  const el = document.getElementById('quiz-streak');
+  if (!el) return;
+  if (state.quizStreak >= 2) {
+    el.textContent = `${state.quizStreak}×`;
+    el.style.display = 'inline-flex';
+    el.classList.remove('streak-bump');
+    void el.offsetWidth;
+    el.classList.add('streak-bump');
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function fireConfetti() {
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const colors = ['#ff5252', '#1dce96', '#ffd60a', '#ff9f0a', '#c084fc', '#60a5fa'];
+  const cx = canvas.width / 2;
+  const cy = canvas.height * 0.42;
+  const particles = Array.from({ length: 90 }, () => {
+    const a = Math.random() * Math.PI * 2;
+    const s = 4 + Math.random() * 9;
+    return {
+      x: cx + (Math.random() - 0.5) * 60,
+      y: cy,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s - 2,
+      w: 7 + Math.random() * 6,
+      h: 4 + Math.random() * 4,
+      rot: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 0.4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    };
+  });
+  let start = null;
+  const duration = 1300;
+  function frame(ts) {
+    if (!start) start = ts;
+    const t = (ts - start) / duration;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.vx *= 0.985; p.rot += p.spin;
+      const alpha = t < 0.55 ? 1 : Math.max(0, 1 - (t - 0.55) / 0.45);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (t < 1) requestAnimationFrame(frame);
+    else canvas.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
 // ── Bulk Import ───────────────────────────────────────────────────────────
 
 function parsePasteLines(text) {
@@ -1346,6 +1411,8 @@ async function startSession() {
     state.currentSessionId = null;
   }
   state.sessionStartTime = Date.now();
+  state.quizStreak = 0;
+  updateStreakDisplay();
 
   showView('quiz-active');
   renderQuestion();

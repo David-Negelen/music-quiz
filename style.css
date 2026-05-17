@@ -1407,3 +1407,27 @@ details[open].review-group > summary.review-group-label::before { content: '▾ 
   background: rgba(255, 82, 82, 0.10);
   color: #ff5252;
 }
+
+/* ── Streak badge ────────────────────────────────────────────────────────── */
+
+.quiz-streak-badge {
+  background: linear-gradient(135deg, #ff9f0a, #ff6b35);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4);
+}
+
+@keyframes streakBump {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+.streak-bump { animation: streakBump 0.28s ease-out; }
