@@ -52,7 +52,7 @@ db.exec(`
   );
 `);
 
-// Migrate: add SR columns to existing databases that predate this schema
+// Migrate: add old SR columns to existing databases
 for (const [col, def] of [
   ['sr_interval', 'INTEGER DEFAULT 1'],
   ['sr_ease',     'REAL    DEFAULT 2.5'],
@@ -62,6 +62,55 @@ for (const [col, def] of [
   try { db.prepare(`ALTER TABLE songs ADD COLUMN ${col} ${def}`).run(); } catch {}
 }
 
+// Migrate: add per-field SR columns
+const perFieldSRCols = [
+  ['sr_interval_title', 'INTEGER DEFAULT 0'],
+  ['sr_interval_artist', 'INTEGER DEFAULT 0'],
+  ['sr_interval_year', 'INTEGER DEFAULT 0'],
+  ['sr_ease_title', 'REAL DEFAULT 2.5'],
+  ['sr_ease_artist', 'REAL DEFAULT 2.5'],
+  ['sr_ease_year', 'REAL DEFAULT 2.5'],
+  ['sr_due_title', 'TEXT DEFAULT NULL'],
+  ['sr_due_artist', 'TEXT DEFAULT NULL'],
+  ['sr_due_year', 'TEXT DEFAULT NULL'],
+  ['sr_reviews_title', 'INTEGER DEFAULT 0'],
+  ['sr_reviews_artist', 'INTEGER DEFAULT 0'],
+  ['sr_reviews_year', 'INTEGER DEFAULT 0'],
+];
+
+for (const [col, def] of perFieldSRCols) {
+  try { db.prepare(`ALTER TABLE songs ADD COLUMN ${col} ${def}`).run(); } catch {}
+}
+
+// Migrate data from old columns to per-field columns if old columns have data
+try {
+  const rows = db.prepare('SELECT id, sr_interval, sr_ease, sr_due, sr_reviews FROM songs WHERE sr_interval > 0 OR sr_ease != 2.5 OR sr_due IS NOT NULL OR sr_reviews > 0').all();
+  for (const row of rows) {
+    db.prepare(`
+      UPDATE songs SET
+        sr_interval_title = ?, sr_interval_artist = ?, sr_interval_year = ?,
+        sr_ease_title = ?, sr_ease_artist = ?, sr_ease_year = ?,
+        sr_due_title = ?, sr_due_artist = ?, sr_due_year = ?,
+        sr_reviews_title = ?, sr_reviews_artist = ?, sr_reviews_year = ?
+      WHERE id = ?
+    `).run(
+      row.sr_interval, row.sr_interval, row.sr_interval,
+      row.sr_ease, row.sr_ease, row.sr_ease,
+      row.sr_due, row.sr_due, row.sr_due,
+      row.sr_reviews, row.sr_reviews, row.sr_reviews,
+      row.id
+    );
+  }
+} catch {}
+
+// Drop old SR columns if migration succeeded
+try {
+  db.prepare('ALTER TABLE songs DROP COLUMN sr_interval').run();
+  db.prepare('ALTER TABLE songs DROP COLUMN sr_ease').run();
+  db.prepare('ALTER TABLE songs DROP COLUMN sr_due').run();
+  db.prepare('ALTER TABLE songs DROP COLUMN sr_reviews').run();
+} catch {}
+
 // ── Prepared statements ────────────────────────────────────────────────────
 
 const SCORE_FIELDS = new Set([
@@ -69,7 +118,12 @@ const SCORE_FIELDS = new Set([
   'attempts_title','attempts_artist','attempts_year',
 ]);
 
-const SR_FIELDS = new Set(['sr_interval', 'sr_ease', 'sr_due', 'sr_reviews']);
+const SR_FIELDS = new Set([
+  'sr_interval_title', 'sr_interval_artist', 'sr_interval_year',
+  'sr_ease_title', 'sr_ease_artist', 'sr_ease_year',
+  'sr_due_title', 'sr_due_artist', 'sr_due_year',
+  'sr_reviews_title', 'sr_reviews_artist', 'sr_reviews_year',
+]);
 
 const SESSION_PATCH_FIELDS = new Set([
   'ended_at', 'song_count', 'correct_title', 'correct_artist', 'correct_year',
@@ -120,6 +174,66 @@ function json(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// ── SM-2 Scheduling ────────────────────────────────────────────────────────
+
+function updateSR(interval, ease, reviews, got) {
+  const q = got ? 5 : 1;
+  let newInterval, newEase, newReviews;
+
+  if (q >= 3) {
+    if      (reviews === 0) newInterval = 1;
+    else if (reviews === 1) newInterval = 3;
+    else                    newInterval = Math.round(interval * ease);
+    newEase    = Math.max(1.3, ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+    newReviews = reviews + 1;
+  } else {
+    newInterval = 1;
+    newEase     = Math.max(1.3, ease - 0.2);
+    newReviews  = 0;
+  }
+
+  const due = new Date();
+  due.setDate(due.getDate() + newInterval);
+
+  return {
+    interval: newInterval,
+    ease: newEase,
+    reviews: newReviews,
+    due: due.toISOString().split('T')[0]
+  };
+}
+
+function daysBetween(a, b) {
+  // Returns days from b to a (positive means a is after b)
+  return Math.round((new Date(a) - new Date(b)) / 86400000);
+}
+
+function queueScore(song) {
+  const today = new Date().toISOString().split('T')[0];
+  const fields = ['title', 'artist', 'year'];
+  let score = 0;
+
+  for (const f of fields) {
+    const due  = song[`sr_due_${f}`];
+    const ease = song[`sr_ease_${f}`];
+
+    if (due === null) {
+      // Never seen — highest priority
+      score += 0;
+    } else if (due <= today) {
+      // Overdue — priority scales with how overdue and how low the ease is
+      const daysOverdue = daysBetween(today, due);
+      score += 10 - Math.min(9, daysOverdue) - (2.5 - ease);
+    } else {
+      // Not yet due — deprioritise
+      const daysUntilDue = daysBetween(due, today);
+      score += 100 + daysUntilDue;
+    }
+  }
+
+  return score;
+}
+
 // ── Route handlers ─────────────────────────────────────────────────────────
 
 async function handlePostSong(req, res) {
@@ -151,6 +265,41 @@ async function handlePatchSong(id, req, res) {
 async function handlePatchSongSR(id, req, res) {
   let body;
   try { body = await readBody(req); } catch { return json(res, 400, { error: 'Bad JSON' }); }
+
+  // Accept field-specific SR updates: { field: "title"|"artist"|"year", got: 0|1 }
+  const field = body.field;
+  const got = body.got;
+
+  if (field && typeof got !== 'undefined') {
+    if (!['title', 'artist', 'year'].includes(field)) {
+      return json(res, 400, { error: 'Invalid field' });
+    }
+
+    // Get current SR state for this field
+    const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
+    if (!song) return json(res, 404, { error: 'Song not found' });
+
+    const interval = song[`sr_interval_${field}`] || 0;
+    const ease = song[`sr_ease_${field}`] || 2.5;
+    const reviews = song[`sr_reviews_${field}`] || 0;
+
+    // Calculate new SR state
+    const newSR = updateSR(interval, ease, reviews, got);
+
+    // Update the database
+    db.prepare(`
+      UPDATE songs SET
+        sr_interval_${field} = ?,
+        sr_ease_${field} = ?,
+        sr_reviews_${field} = ?,
+        sr_due_${field} = ?
+      WHERE id = ?
+    `).run(newSR.interval, newSR.ease, newSR.reviews, newSR.due, id);
+
+    return json(res, 200, { ok: true, sr: newSR });
+  }
+
+  // Legacy support: direct column updates
   const fields = Object.keys(body).filter(k => SR_FIELDS.has(k));
   if (fields.length) {
     const sql = `UPDATE songs SET ${fields.map(f => `${f} = @${f}`).join(', ')} WHERE id = @id`;
@@ -247,6 +396,8 @@ function handleGetStats(res) {
     if (cur > bestStreak) bestStreak = cur;
   }
 
+  const dueCounts = computeDueCounts();
+
   return json(res, 200, {
     totalSongs,
     sessionsPlayed,
@@ -261,6 +412,7 @@ function handleGetStats(res) {
     hardestSongs,
     recentSessions,
     bestStreak,
+    dueCounts,
   });
 }
 
@@ -275,6 +427,93 @@ function handleGetSongHistory(id, res) {
   return json(res, 200, rows);
 }
 
+function handleGetQueue(req, res) {
+  const qs = new URL(req.url, 'http://x').searchParams;
+  const countParam = qs.get('count');
+  const count = countParam ? Math.max(1, parseInt(countParam)) : 0; // 0 means all
+  
+  const songs = db.prepare('SELECT * FROM songs ORDER BY added_at DESC').all();
+  const today = new Date().toISOString().split('T')[0];
+  
+  console.log(`Queue request: countParam=${countParam}, count=${count}, songs_returned=${songs.length}`);
+  
+  // Edge case: fewer than 10 songs
+  if (songs.length < 10) {
+    console.log(`Edge case: < 10 songs (${songs.length})`);
+    const shuffled = [...songs].sort(() => Math.random() - 0.5);
+    console.log(`After shuffle: ${shuffled.length} songs`);
+    const result = count > 0 ? shuffled.slice(0, count) : shuffled;
+    console.log(`Returning: ${result.length} songs`);
+    return json(res, 200, {
+      queue: result,
+      note: 'Add more songs for smart scheduling.'
+    });
+  }
+
+  // Score and sort songs
+  const scored = songs.map(song => ({
+    ...song,
+    _score: queueScore(song)
+  }));
+
+  scored.sort((a, b) => a._score - b._score);
+
+  // Check if all songs are not yet due
+  const anyDue = scored.some(s => {
+    const fields = ['title', 'artist', 'year'];
+    return fields.some(f => {
+      const due = s[`sr_due_${f}`];
+      return due !== null && due <= today;
+    });
+  });
+
+  let queue = scored.map(s => {
+    const { _score, ...rest } = s;
+    return rest;
+  });
+
+  if (!anyDue && scored.length > 0) {
+    // All caught up - return all songs
+    return json(res, 200, {
+      queue,
+      note: 'All caught up — reviewing early.'
+    });
+  }
+
+  if (count > 0) {
+    queue = queue.slice(0, count);
+  }
+
+  return json(res, 200, { queue });
+}
+
+function computeDueCounts(res) {
+  const today = new Date().toISOString().split('T')[0];
+  const songs = db.prepare('SELECT * FROM songs').all();
+
+  let dueToday = 0, newSongs = 0, learned = 0, notDue = 0;
+
+  for (const song of songs) {
+    const isNew = !song.sr_due_title && !song.sr_due_artist && !song.sr_due_year;
+    const allDue = [song.sr_due_title, song.sr_due_artist, song.sr_due_year];
+    const anyDueNow = allDue.some(d => d && d <= today);
+    const allLearned = song.sr_reviews_title >= 3 && song.sr_reviews_artist >= 3 && song.sr_reviews_year >= 3;
+    const allFuture = allDue.every(d => d === null || d > today);
+
+    if (isNew) {
+      newSongs++;
+    } else if (anyDueNow) {
+      dueToday++;
+    } else if (allLearned && allFuture) {
+      learned++;
+    } else {
+      notDue++;
+    }
+  }
+
+  return { dueToday, newSongs, learned, notDue };
+}
+
 // ── API dispatcher ─────────────────────────────────────────────────────────
 
 async function handleApi(req, res) {
@@ -285,11 +524,16 @@ async function handleApi(req, res) {
   const id       = parts[2] || null;
   const sub      = parts[3] || null;
 
-  if (resource === 'stats' && !id && method === 'GET') return handleGetStats(res);
+  if (resource === 'stats' && !id && method === 'GET') {
+    const stats = handleGetStats(res);
+    // Note: handleGetStats calls json directly, so we return early
+    return;
+  }
 
   if (resource === 'songs') {
     if (!id && method === 'GET')                          return json(res, 200, stmts.allSongs.all());
     if (!id && method === 'POST')                         return handlePostSong(req, res);
+    if (id === 'queue' && method === 'GET')               return handleGetQueue(req, res);
     if (id && !sub && method === 'DELETE')                { stmts.deleteSong.run(id); return json(res, 200, { ok: true }); }
     if (id && !sub && method === 'PATCH')                 return handlePatchSong(id, req, res);
     if (id && sub === 'sr' && method === 'PATCH')         return handlePatchSongSR(id, req, res);

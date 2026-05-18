@@ -187,10 +187,21 @@ async function loadLibrary() {
       year:       r.year != null ? String(r.year) : '????',
       artwork:    r.artwork_url || '',
       previewUrl: r.preview_url || '',
-      srInterval: r.sr_interval || 1,
-      srEase:     r.sr_ease     || 2.5,
-      srDue:      r.sr_due      || null,
-      srReviews:  r.sr_reviews  || 0,
+      // Per-field SR for title
+      srInterval_title: r.sr_interval_title || 0,
+      srEase_title:     r.sr_ease_title     || 2.5,
+      srDue_title:      r.sr_due_title      || null,
+      srReviews_title:  r.sr_reviews_title  || 0,
+      // Per-field SR for artist
+      srInterval_artist: r.sr_interval_artist || 0,
+      srEase_artist:     r.sr_ease_artist     || 2.5,
+      srDue_artist:      r.sr_due_artist      || null,
+      srReviews_artist:  r.sr_reviews_artist  || 0,
+      // Per-field SR for year
+      srInterval_year: r.sr_interval_year || 0,
+      srEase_year:     r.sr_ease_year     || 2.5,
+      srDue_year:      r.sr_due_year      || null,
+      srReviews_year:  r.sr_reviews_year  || 0,
     }));
     songStats = {};
     for (const r of rows) {
@@ -341,24 +352,26 @@ function shuffle(arr) {
   return a;
 }
 
-function buildStudySession() {
+async function buildStudySession() {
   const { count } = state.quizConfig;
-  const today = new Date().toISOString().slice(0, 10);
-
-  const overdue = [], fresh = [], notDue = [];
-  for (const song of state.library) {
-    if (!song.srDue)            fresh.push(song);
-    else if (song.srDue <= today) overdue.push(song);
-    else                        notDue.push(song);
+  
+  try {
+    const qs = new URLSearchParams();
+    if (count !== null) qs.append('count', count);
+    const res = await fetch(`/api/songs/queue?${qs}`);
+    const data = await res.json();
+    const songs = data.queue || [];
+    
+    if (data.note) {
+      console.log('Queue note:', data.note);
+    }
+    
+    if (!songs.length) return null;
+    return songs.map(song => ({ song, submitted: false }));
+  } catch (e) {
+    console.error('Failed to build study session:', e);
+    return null;
   }
-  overdue.sort((a, b) => (a.srDue < b.srDue ? -1 : 1));
-  notDue.sort((a, b)  => (a.srDue < b.srDue ? -1 : 1));
-
-  let songs = [...overdue, ...fresh, ...notDue];
-  if (count !== null && count < songs.length) songs = songs.slice(0, count);
-  if (!songs.length) return null;
-
-  return songs.map(song => ({ song, submitted: false }));
 }
 
 // ── Audio Player ──────────────────────────────────────────────────────────
@@ -515,14 +528,43 @@ function renderMasteryOverview() {
   if (!state.library.length) { el.innerHTML = ''; return; }
 
   const today = new Date().toISOString().slice(0, 10);
-  let due = 0, fresh = 0, notDue = 0;
+  let dueToday = 0, newSongs = 0, learned = 0, notDue = 0;
+
   for (const s of state.library) {
-    if (!s.srDue)              fresh++;
-    else if (s.srDue <= today) due++;
-    else                       notDue++;
+    // New: all three sr_due_* are null
+    const isNew = !s.srDue_title && !s.srDue_artist && !s.srDue_year;
+    
+    if (isNew) {
+      newSongs++;
+    } else {
+      // Check if any field is due today
+      const fields = ['title', 'artist', 'year'];
+      const anyDue = fields.some(f => {
+        const due = s[`srDue_${f}`];
+        return due && due <= today;
+      });
+
+      if (anyDue) {
+        dueToday++;
+      } else {
+        // Check if learned: all three have >= 3 reviews and all are in future
+        const allLearned = 
+          (s.srReviews_title >= 3) && (s.srReviews_artist >= 3) && (s.srReviews_year >= 3);
+        const allFuture = 
+          (!s.srDue_title || s.srDue_title > today) &&
+          (!s.srDue_artist || s.srDue_artist > today) &&
+          (!s.srDue_year || s.srDue_year > today);
+        
+        if (allLearned && allFuture) {
+          learned++;
+        } else {
+          notDue++;
+        }
+      }
+    }
   }
 
-  el.innerHTML = `<p class="sr-due-line">Due today: <span class="sr-due-count">${due}</span> &nbsp;·&nbsp; New: <span class="sr-due-count">${fresh}</span> &nbsp;·&nbsp; Not due: <span class="sr-due-count">${notDue}</span></p>`;
+  el.innerHTML = `<p class="sr-due-line">Due today: <span class="sr-due-count">${dueToday}</span> &nbsp;·&nbsp; New: <span class="sr-due-count">${newSongs}</span> &nbsp;·&nbsp; Learned: <span class="sr-due-count">${learned}</span> &nbsp;·&nbsp; Not due: <span class="sr-due-count">${notDue}</span></p>`;
 }
 
 function updateLibraryStatus() {
@@ -718,8 +760,7 @@ async function advanceQuiz() {
   const ans = state.quizAnswers[idx];
 
   if (ans) {
-    const correctCount = Object.values(ans.correct).filter(Boolean).length;
-    applySmTwo(q.song, correctCount);
+    applySmTwo(q.song, ans.correct);
 
     if (state.currentSessionId) {
       fetch(`/api/sessions/${state.currentSessionId}/results`, {
@@ -744,40 +785,53 @@ async function advanceQuiz() {
   }
 }
 
-function applySmTwo(song, correctCount) {
-  const q = correctCount === 3 ? 5 : correctCount === 2 ? 3 : correctCount === 1 ? 2 : 1;
+function applySmTwo(song, correct) {
+  // correct = { title, artist, year } - booleans
+  const fields = ['title', 'artist', 'year'];
+  
+  // Update local state for each field and make parallel PATCH calls
+  const updates = fields.map(field => {
+    const got = correct[field] ? 1 : 0;
+    const interval = song[`srInterval_${field}`] || 0;
+    const ease = song[`srEase_${field}`] || 2.5;
+    const reviews = song[`srReviews_${field}`] || 0;
 
-  let interval = song.srInterval || 1;
-  let ease     = song.srEase     || 2.5;
-  let reviews  = song.srReviews  || 0;
+    // Calculate new SR state using SM-2
+    const q = got ? 5 : 1;
+    let newInterval, newEase, newReviews;
 
-  let newInterval, newEase, newReviews;
-  if (q >= 3) {
-    if      (reviews === 0) newInterval = 1;
-    else if (reviews === 1) newInterval = 6;
-    else                    newInterval = Math.round(interval * ease);
-    newEase    = Math.max(1.3, ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
-    newReviews = reviews + 1;
-  } else {
-    newInterval = 1;
-    newEase     = ease;
-    newReviews  = 0;
-  }
+    if (q >= 3) {
+      if      (reviews === 0) newInterval = 1;
+      else if (reviews === 1) newInterval = 3;
+      else                    newInterval = Math.round(interval * ease);
+      newEase    = Math.max(1.3, ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+      newReviews = reviews + 1;
+    } else {
+      newInterval = 1;
+      newEase     = Math.max(1.3, ease - 0.2);
+      newReviews  = 0;
+    }
 
-  const due = new Date();
-  due.setDate(due.getDate() + newInterval);
-  const newDue = due.toISOString().slice(0, 10);
+    const due = new Date();
+    due.setDate(due.getDate() + newInterval);
+    const newDue = due.toISOString().split('T')[0];
 
-  song.srInterval = newInterval;
-  song.srEase     = newEase;
-  song.srReviews  = newReviews;
-  song.srDue      = newDue;
+    // Update local state
+    song[`srInterval_${field}`] = newInterval;
+    song[`srEase_${field}`] = newEase;
+    song[`srReviews_${field}`] = newReviews;
+    song[`srDue_${field}`] = newDue;
 
-  fetch(`/api/songs/${song.id}/sr`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sr_interval: newInterval, sr_ease: newEase, sr_due: newDue, sr_reviews: newReviews }),
-  }).catch(() => {});
+    // Return fetch promise
+    return fetch(`/api/songs/${song.id}/sr`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, got }),
+    }).catch(() => {});
+  });
+
+  // Fire all updates in parallel but don't wait for them
+  Promise.all(updates).catch(() => {});
 }
 
 function closeSession() {
@@ -1398,7 +1452,14 @@ async function startSession() {
   state.preMastery = {};
   state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
 
-  state.quizQuestions = buildStudySession();
+  state.quizQuestions = await buildStudySession();
+  
+  if (!state.quizQuestions) {
+    setupError.textContent = 'No songs in queue. Your library may be too small.';
+    setupError.style.display = 'block';
+    return;
+  }
+  
   state.quizIndex = 0;
   state.quizScore = 0;
   state.quizAnswers = [];
