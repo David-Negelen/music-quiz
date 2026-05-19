@@ -367,7 +367,30 @@ async function buildStudySession() {
     }
     
     if (!songs.length) return null;
-    return songs.map(song => ({ song, submitted: false }));
+    return songs.map(raw => ({
+      song: {
+        id:         raw.id,
+        title:      raw.title,
+        artist:     raw.artist,
+        album:      raw.album || '',
+        year:       raw.year != null ? String(raw.year) : '????',
+        artwork:    raw.artwork_url || '',
+        previewUrl: raw.preview_url || '',
+        srInterval_title: raw.sr_interval_title || 0,
+        srEase_title:     raw.sr_ease_title     || 2.5,
+        srDue_title:      raw.sr_due_title      || null,
+        srReviews_title:  raw.sr_reviews_title  || 0,
+        srInterval_artist: raw.sr_interval_artist || 0,
+        srEase_artist:     raw.sr_ease_artist     || 2.5,
+        srDue_artist:      raw.sr_due_artist      || null,
+        srReviews_artist:  raw.sr_reviews_artist  || 0,
+        srInterval_year: raw.sr_interval_year || 0,
+        srEase_year:     raw.sr_ease_year     || 2.5,
+        srDue_year:      raw.sr_due_year      || null,
+        srReviews_year:  raw.sr_reviews_year  || 0,
+      },
+      submitted: false,
+    }));
   } catch (e) {
     console.error('Failed to build study session:', e);
     return null;
