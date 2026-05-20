@@ -659,39 +659,49 @@ function renderGenreFilter() {
     return a.localeCompare(b);
   });
 
-  // Hide if only one distinct genre bucket
   if (genres.length <= 1) { group.style.display = 'none'; return; }
   group.style.display = 'block';
 
-  // Restore saved selection from localStorage
-  let saved;
-  try { saved = JSON.parse(localStorage.getItem('musik-quiz-genres')); } catch {}
-  const savedSet = saved ? new Set(saved) : null;
+  // Persist excluded genres so new genres are checked by default
+  let excluded;
+  try { excluded = JSON.parse(localStorage.getItem('musik-quiz-genres-excluded')); } catch {}
+  const excludedSet = excluded ? new Set(excluded) : new Set();
 
   const unknownCount = counts['__unknown__'] || 0;
 
-  container.innerHTML = genres.map(g => {
+  const checkboxesHtml = genres.map(g => {
     const label = g === '__unknown__' ? 'Unknown' : g;
-    const checked = savedSet ? savedSet.has(g) : true;
+    const checked = !excludedSet.has(g);
     return `<label class="checkbox-label">
       <input type="checkbox" class="genre-cb" value="${esc(g)}" ${checked ? 'checked' : ''}>
       <span>${esc(label)} <span class="genre-count">(${counts[g]})</span></span>
     </label>`;
-  }).join('') + (unknownCount > 0 ? `
-    <div class="genre-backfill-row">
+  }).join('');
+
+  const backfillHtml = unknownCount > 0 ? `
+    <div class="genre-backfill-row" style="grid-column: 1 / -1">
       <button id="genre-backfill-btn" class="btn-ghost btn-sm">Fix ${unknownCount} unknown genres</button>
       <span id="genre-backfill-status" class="genre-backfill-status"></span>
-    </div>` : '');
+    </div>` : '';
 
-  // Save selection on change
-  container.querySelectorAll('.genre-cb').forEach(cb => {
-    cb.addEventListener('change', () => {
-      const checked = [...container.querySelectorAll('.genre-cb')].filter(c => c.checked).map(c => c.value);
-      localStorage.setItem('musik-quiz-genres', JSON.stringify(checked));
-    });
-  });
+  container.innerHTML = `<div class="genre-scroll">${checkboxesHtml}${backfillHtml}</div>`;
 
+  function saveExcluded() {
+    const exc = [...container.querySelectorAll('.genre-cb')].filter(c => !c.checked).map(c => c.value);
+    localStorage.setItem('musik-quiz-genres-excluded', JSON.stringify(exc));
+  }
+
+  container.querySelectorAll('.genre-cb').forEach(cb => cb.addEventListener('change', saveExcluded));
   document.getElementById('genre-backfill-btn')?.addEventListener('click', backfillGenres);
+
+  document.getElementById('genre-all-btn')?.addEventListener('click', () => {
+    container.querySelectorAll('.genre-cb').forEach(cb => { cb.checked = true; });
+    saveExcluded();
+  });
+  document.getElementById('genre-none-btn')?.addEventListener('click', () => {
+    container.querySelectorAll('.genre-cb').forEach(cb => { cb.checked = false; });
+    saveExcluded();
+  });
 }
 
 function updateLibraryStatus() {
