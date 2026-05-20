@@ -198,6 +198,7 @@
       <div class="import-tabs">
         <button class="import-tab active" data-tab="paste">Paste list</button>
         <button class="import-tab" data-tab="file">Apple Music file</button>
+        <button class="import-tab" data-tab="charts">Top Charts</button>
       </div>
 
       <!-- Paste tab -->
@@ -222,6 +223,37 @@
           <input type="file" id="file-input" accept=".txt,.tsv,.csv" style="display:none">
           <span id="file-label">Choose file or drag &amp; drop</span>
         </label>
+      </div>
+
+      <!-- Charts tab -->
+      <div id="import-tab-charts" class="import-tab-content">
+        <p class="import-hint">Import top songs directly from the iTunes charts.</p>
+        <div class="chart-options">
+          <div class="chart-option-row">
+            <label class="setting-label" for="chart-genre">Genre</label>
+            <select id="chart-genre" class="library-sort-select chart-select">
+              <option value="">Overall Top</option>
+              <option value="18">Hip-Hop / Rap</option>
+              <option value="14">Pop</option>
+              <option value="21">Rock</option>
+              <option value="15">R&amp;B / Soul</option>
+              <option value="6">Country</option>
+              <option value="7">Electronic</option>
+              <option value="20">Alternative</option>
+              <option value="11">Jazz</option>
+              <option value="9">Classical</option>
+            </select>
+          </div>
+          <div class="chart-option-row">
+            <label class="setting-label" for="chart-count">Songs</label>
+            <select id="chart-count" class="library-sort-select chart-select">
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100" selected>Top 100</option>
+              <option value="200">Top 200</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div id="import-progress" style="display:none">
