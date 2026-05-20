@@ -1245,16 +1245,8 @@ async function fetchLastFmTracks(tag, limit, apiKey) {
 }
 
 async function runAllTimeImport() {
-  const tag    = document.getElementById('chart-genre').value;
-  const limit  = parseInt(document.getElementById('chart-count').value, 10);
-  const keyEl  = document.getElementById('lastfm-key');
-  const apiKey = keyEl.value.trim();
-
-  if (!apiKey) {
-    keyEl.focus();
-    return;
-  }
-  localStorage.setItem('musik-quiz-lastfm-key', apiKey);
+  const tag   = document.getElementById('chart-genre').value;
+  const limit = parseInt(document.getElementById('chart-count').value, 10);
 
   const progressEl   = document.getElementById('import-progress');
   const statusEl     = document.getElementById('import-status');
@@ -1267,6 +1259,20 @@ async function runAllTimeImport() {
   runBtn.disabled = cancelBtn.disabled = true;
   progressFill.style.width = '0%';
   statusEl.textContent = 'Fetching Last.fm chart…';
+
+  let apiKey;
+  try {
+    const cfg = await fetch('/api/config').then(r => r.json());
+    apiKey = cfg.lastfmKey;
+  } catch {
+    apiKey = '';
+  }
+
+  if (!apiKey) {
+    statusEl.textContent = 'No Last.fm API key configured. Add LASTFM_API_KEY to your .env file and restart the server.';
+    runBtn.disabled = cancelBtn.disabled = false;
+    return;
+  }
 
   let entries;
   try {
@@ -1283,7 +1289,6 @@ async function runAllTimeImport() {
     return;
   }
 
-  // Hand off to the existing bulk import — it handles iTunes lookup, rate-limiting, and progress UI
   runBulkImport(entries);
 }
 
@@ -1506,8 +1511,6 @@ function openModal(startTab) {
   document.getElementById('import-run-btn').textContent = 'Import';
   document.getElementById('import-run-btn').onclick = handleImportRun;
   document.getElementById('import-cancel-btn').disabled = false;
-  const savedKey = localStorage.getItem('musik-quiz-lastfm-key') || '';
-  document.getElementById('lastfm-key').value = savedKey;
   switchImportTab(startTab || 'paste');
 }
 

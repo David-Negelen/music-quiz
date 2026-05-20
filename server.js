@@ -5,6 +5,15 @@ const fs   = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 
+// Load .env if present
+try {
+  const env = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+  for (const line of env.split('\n')) {
+    const m = line.match(/^([^#=\s][^=]*)=(.*)$/);
+    if (m) process.env[m[1].trim()] = m[2].trim();
+  }
+} catch {}
+
 const PORT = 3000;
 const db   = new Database(path.join(__dirname, 'db.sqlite'));
 
@@ -532,6 +541,10 @@ async function handleApi(req, res) {
   const resource = parts[1];
   const id       = parts[2] || null;
   const sub      = parts[3] || null;
+
+  if (resource === 'config' && !id && method === 'GET') {
+    return json(res, 200, { lastfmKey: process.env.LASTFM_API_KEY || '' });
+  }
 
   if (resource === 'stats' && !id && method === 'GET') {
     const stats = handleGetStats(res);
