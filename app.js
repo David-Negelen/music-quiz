@@ -460,6 +460,9 @@ function showView(name) {
     b.classList.toggle('active', b.dataset.view === name || (name.startsWith('quiz') && b.dataset.view === 'quiz-setup'));
   });
   if (!name.startsWith('quiz')) stopAudio();
+  if (['library', 'stats', 'quiz-setup'].includes(name)) {
+    history.replaceState(null, '', `#${name}`);
+  }
 }
 
 // ── Render: Search Results ────────────────────────────────────────────────
@@ -594,6 +597,51 @@ function renderMasteryOverview() {
   el.innerHTML = `<p class="sr-due-line">Due today: <span class="sr-due-count">${dueToday}</span> &nbsp;·&nbsp; New: <span class="sr-due-count">${newSongs}</span> &nbsp;·&nbsp; Learned: <span class="sr-due-count">${learned}</span> &nbsp;·&nbsp; Not due: <span class="sr-due-count">${notDue}</span></p>`;
 }
 
+async function backfillGenres() {
+  const unknowns = state.library.filter(s => !s.genre);
+  if (!unknowns.length) return;
+
+  const btn = document.getElementById('genre-backfill-btn');
+  const statusEl = document.getElementById('genre-backfill-status');
+  if (btn) btn.disabled = true;
+
+  let fixed = 0;
+  let failed = 0;
+
+  for (let i = 0; i < unknowns.length; i++) {
+    const song = unknowns[i];
+    if (statusEl) statusEl.textContent = `Fixing ${i + 1} / ${unknowns.length}…`;
+
+    try {
+      const res = await fetch(`https://itunes.apple.com/lookup?id=${song.id}`);
+      const data = await res.json();
+      const genre = data.results?.[0]?.primaryGenreName;
+      if (genre) {
+        await fetch(`/api/songs/${song.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ genre }),
+        });
+        const lib = state.library.find(s => s.id === song.id);
+        if (lib) lib.genre = genre;
+        fixed++;
+      } else {
+        failed++;
+      }
+    } catch {
+      failed++;
+    }
+
+    if (i < unknowns.length - 1) {
+      const delay = (i + 1) % 20 === 0 ? 2000 : 150;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+
+  if (statusEl) statusEl.textContent = `Done — fixed ${fixed}${failed ? `, ${failed} not found` : ''}.`;
+  renderGenreFilter();
+}
+
 function renderGenreFilter() {
   const group = document.getElementById('genre-filter-group');
   const container = document.getElementById('genre-checkboxes');
@@ -620,6 +668,8 @@ function renderGenreFilter() {
   try { saved = JSON.parse(localStorage.getItem('musik-quiz-genres')); } catch {}
   const savedSet = saved ? new Set(saved) : null;
 
+  const unknownCount = counts['__unknown__'] || 0;
+
   container.innerHTML = genres.map(g => {
     const label = g === '__unknown__' ? 'Unknown' : g;
     const checked = savedSet ? savedSet.has(g) : true;
@@ -627,7 +677,11 @@ function renderGenreFilter() {
       <input type="checkbox" class="genre-cb" value="${esc(g)}" ${checked ? 'checked' : ''}>
       <span>${esc(label)} <span class="genre-count">(${counts[g]})</span></span>
     </label>`;
-  }).join('');
+  }).join('') + (unknownCount > 0 ? `
+    <div class="genre-backfill-row">
+      <button id="genre-backfill-btn" class="btn-ghost btn-sm">Fix ${unknownCount} unknown genres</button>
+      <span id="genre-backfill-status" class="genre-backfill-status"></span>
+    </div>` : '');
 
   // Save selection on change
   container.querySelectorAll('.genre-cb').forEach(cb => {
@@ -636,6 +690,8 @@ function renderGenreFilter() {
       localStorage.setItem('musik-quiz-genres', JSON.stringify(checked));
     });
   });
+
+  document.getElementById('genre-backfill-btn')?.addEventListener('click', backfillGenres);
 }
 
 function updateLibraryStatus() {
@@ -1354,6 +1410,7 @@ async function runBulkImport(entries) {
   let added = 0;
   let skipped = 0;
   let failed = 0;
+  let apiCalls = 0;
   const notFound = [];
 
   for (let i = 0; i < entries.length; i++) {
@@ -1372,8 +1429,11 @@ async function runBulkImport(entries) {
       continue;
     }
 
+    let madeRequest = false;
     try {
       const song = await searchBestMatch(entry);
+      madeRequest = true;
+      apiCalls++;
       if (song) {
         if (inLibrary(song.id)) {
           skipped++;
@@ -1386,14 +1446,16 @@ async function runBulkImport(entries) {
         notFound.push(entry.artist ? `${entry.artist} – ${entry.title}` : entry.title);
       }
     } catch {
+      madeRequest = true;
+      apiCalls++;
       failed++;
       notFound.push(entry.artist ? `${entry.artist} – ${entry.title}` : entry.title);
     }
 
-    if (i < entries.length - 1) {
-      // Longer pause every 10 songs to stay well under the iTunes rate limit
-      const delay = (i + 1) % 10 === 0 ? 3000 : 400;
-      if ((i + 1) % 10 === 0) statusEl.textContent = `Pausing briefly to avoid rate limits…`;
+    // Only delay after real iTunes requests (skipped entries need no pause)
+    if (madeRequest && i < entries.length - 1) {
+      const delay = apiCalls % 10 === 0 ? 3000 : 400;
+      if (apiCalls % 10 === 0) statusEl.textContent = `Pausing briefly to avoid rate limits…`;
       await new Promise(r => setTimeout(r, delay));
     }
   }
@@ -1820,6 +1882,18 @@ async function init() {
   document.getElementById('stats-load-more').addEventListener('click', () => {
     loadSessionHistory(true);
   });
+
+  // Restore tab from URL hash on load / browser back-forward
+  function navigateToHash() {
+    const hash = window.location.hash.slice(1);
+    if (['library', 'stats', 'quiz-setup'].includes(hash)) {
+      showView(hash);
+      if (hash === 'quiz-setup') { renderMasteryOverview(); renderGenreFilter(); }
+      if (hash === 'stats') renderStats();
+    }
+  }
+  window.addEventListener('hashchange', navigateToHash);
+  navigateToHash();
 }
 
 init();

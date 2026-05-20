@@ -128,6 +128,7 @@ try {
 const SCORE_FIELDS = new Set([
   'score_title',   'score_artist',   'score_year',
   'attempts_title','attempts_artist','attempts_year',
+  'genre',
 ]);
 
 const SR_FIELDS = new Set([

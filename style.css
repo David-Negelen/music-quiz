@@ -529,6 +529,8 @@ body {
 }
 
 .genre-count { color: var(--text-2); font-size: 0.85em; }
+.genre-backfill-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.genre-backfill-status { font-size: 0.85em; color: var(--text-2); }
 
 /* ── Active Quiz ─────────────────────────────────────────────────────────── */
 
