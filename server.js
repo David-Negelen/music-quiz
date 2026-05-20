@@ -123,6 +123,66 @@ try {
   db.prepare('ALTER TABLE songs DROP COLUMN sr_reviews').run();
 } catch {}
 
+// Migrate: replay session_results into SR fields for songs that have history but no SR data
+// This fixes sessions that were played before per-result SR updates were added.
+try {
+  const needsRebuild = db.prepare(`
+    SELECT DISTINCT sr.song_id
+    FROM session_results sr
+    JOIN songs s ON s.id = sr.song_id
+    WHERE s.sr_due_title IS NULL AND s.sr_due_artist IS NULL AND s.sr_due_year IS NULL
+  `).all().map(r => r.song_id);
+
+  if (needsRebuild.length > 0) {
+    const getHistory = db.prepare(`
+      SELECT got_title, got_artist, got_year, answered_at
+      FROM session_results WHERE song_id = ? ORDER BY answered_at ASC
+    `);
+    const updateSong = (songId, field, interval, ease, reviews, due) => {
+      db.prepare(`UPDATE songs SET sr_interval_${field}=?, sr_ease_${field}=?, sr_reviews_${field}=?, sr_due_${field}=? WHERE id=?`)
+        .run(interval, ease, reviews, due, songId);
+    };
+
+    for (const songId of needsRebuild) {
+      const rows = getHistory.all(songId);
+      const state = {
+        title:  { interval: 0, ease: 2.5, reviews: 0, due: null },
+        artist: { interval: 0, ease: 2.5, reviews: 0, due: null },
+        year:   { interval: 0, ease: 2.5, reviews: 0, due: null },
+      };
+      for (const row of rows) {
+        const date = row.answered_at.slice(0, 10);
+        for (const field of ['title', 'artist', 'year']) {
+          const got = row[`got_${field}`] ? 1 : 0;
+          const s = state[field];
+          const q = got ? 5 : 1;
+          if (q >= 3) {
+            if      (s.reviews === 0) s.interval = 1;
+            else if (s.reviews === 1) s.interval = 3;
+            else                      s.interval = Math.round(s.interval * s.ease);
+            s.ease    = Math.max(1.3, s.ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+            s.reviews = s.reviews + 1;
+          } else {
+            s.interval = 1;
+            s.ease     = Math.max(1.3, s.ease - 0.2);
+            s.reviews  = 0;
+          }
+          const due = new Date(date);
+          due.setDate(due.getDate() + s.interval);
+          s.due = due.toISOString().split('T')[0];
+        }
+      }
+      for (const field of ['title', 'artist', 'year']) {
+        const s = state[field];
+        if (s.due) updateSong(songId, field, s.interval, s.ease, s.reviews, s.due);
+      }
+    }
+    console.log(`Rebuilt SR data for ${needsRebuild.length} songs from session history`);
+  }
+} catch (e) {
+  console.error('SR rebuild failed:', e.message);
+}
+
 // ── Prepared statements ────────────────────────────────────────────────────
 
 const SCORE_FIELDS = new Set([
@@ -189,7 +249,7 @@ function json(res, status, data) {
 
 // ── SM-2 Scheduling ────────────────────────────────────────────────────────
 
-function updateSR(interval, ease, reviews, got) {
+function updateSR(interval, ease, reviews, got, baseDate) {
   const q = got ? 5 : 1;
   let newInterval, newEase, newReviews;
 
@@ -205,7 +265,7 @@ function updateSR(interval, ease, reviews, got) {
     newReviews  = 0;
   }
 
-  const due = new Date();
+  const due = baseDate ? new Date(baseDate) : new Date();
   due.setDate(due.getDate() + newInterval);
 
   return {
@@ -343,16 +403,32 @@ async function handlePatchSession(id, req, res) {
   return json(res, 200, { ok: true });
 }
 
+function applySRUpdate(songId, field, got, today) {
+  const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(songId);
+  if (!song) return;
+  const newSR = updateSR(
+    song[`sr_interval_${field}`] || 0,
+    song[`sr_ease_${field}`]     || 2.5,
+    song[`sr_reviews_${field}`]  || 0,
+    got,
+    today,
+  );
+  db.prepare(`UPDATE songs SET sr_interval_${field}=?, sr_ease_${field}=?, sr_reviews_${field}=?, sr_due_${field}=? WHERE id=?`)
+    .run(newSR.interval, newSR.ease, newSR.reviews, newSR.due, songId);
+}
+
 async function handlePostSessionResult(sessionId, req, res) {
   let body;
   try { body = await readBody(req); } catch { return json(res, 400, { error: 'Bad JSON' }); }
-  stmts.insertResult.run({
-    session_id: parseInt(sessionId),
-    song_id:    String(body.song_id),
-    got_title:  body.got_title  ? 1 : 0,
-    got_artist: body.got_artist ? 1 : 0,
-    got_year:   body.got_year   ? 1 : 0,
-  });
+  const songId = String(body.song_id);
+  const gotTitle  = body.got_title  ? 1 : 0;
+  const gotArtist = body.got_artist ? 1 : 0;
+  const gotYear   = body.got_year   ? 1 : 0;
+  stmts.insertResult.run({ session_id: parseInt(sessionId), song_id: songId, got_title: gotTitle, got_artist: gotArtist, got_year: gotYear });
+  const today = new Date().toISOString().split('T')[0];
+  applySRUpdate(songId, 'title',  gotTitle,  today);
+  applySRUpdate(songId, 'artist', gotArtist, today);
+  applySRUpdate(songId, 'year',   gotYear,   today);
   return json(res, 201, { ok: true });
 }
 

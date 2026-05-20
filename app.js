@@ -996,20 +996,14 @@ async function advanceQuiz() {
 }
 
 function applySmTwo(song, correct) {
-  // correct = { title, artist, year } - booleans
-  const fields = ['title', 'artist', 'year'];
-  
-  // Update local state for each field and make parallel PATCH calls
-  const updates = fields.map(field => {
+  // Update local in-memory state only; server updates SR when it saves the session result.
+  for (const field of ['title', 'artist', 'year']) {
     const got = correct[field] ? 1 : 0;
     const interval = song[`srInterval_${field}`] || 0;
-    const ease = song[`srEase_${field}`] || 2.5;
-    const reviews = song[`srReviews_${field}`] || 0;
-
-    // Calculate new SR state using SM-2
+    const ease     = song[`srEase_${field}`]     || 2.5;
+    const reviews  = song[`srReviews_${field}`]  || 0;
     const q = got ? 5 : 1;
     let newInterval, newEase, newReviews;
-
     if (q >= 3) {
       if      (reviews === 0) newInterval = 1;
       else if (reviews === 1) newInterval = 3;
@@ -1021,27 +1015,13 @@ function applySmTwo(song, correct) {
       newEase     = Math.max(1.3, ease - 0.2);
       newReviews  = 0;
     }
-
     const due = new Date();
     due.setDate(due.getDate() + newInterval);
-    const newDue = due.toISOString().split('T')[0];
-
-    // Update local state
     song[`srInterval_${field}`] = newInterval;
-    song[`srEase_${field}`] = newEase;
-    song[`srReviews_${field}`] = newReviews;
-    song[`srDue_${field}`] = newDue;
-
-    // Return fetch promise
-    return fetch(`/api/songs/${song.id}/sr`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ field, got }),
-    }).catch(() => {});
-  });
-
-  // Fire all updates in parallel but don't wait for them
-  Promise.all(updates).catch(() => {});
+    song[`srEase_${field}`]     = newEase;
+    song[`srReviews_${field}`]  = newReviews;
+    song[`srDue_${field}`]      = due.toISOString().split('T')[0];
+  }
 }
 
 function closeSession() {
