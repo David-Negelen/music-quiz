@@ -551,8 +551,8 @@ body {
 
 .genre-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
   margin-bottom: 12px;
 }
 
@@ -568,31 +568,31 @@ body {
 .genre-card.expanded { border-color: var(--accent); grid-column: 1 / -1; cursor: default; }
 
 .genre-card-main {
-  padding: 16px 16px 14px;
+  padding: 22px 20px 20px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 .genre-card.expanded .genre-card-main { border-bottom: 0.5px solid var(--border); }
 
 .genre-card-text { flex: 1; min-width: 0; }
 
 .genre-card-name {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text-1);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.genre-card-summary { font-size: 12px; color: var(--text-2); }
+.genre-card-summary { font-size: 13px; color: var(--text-2); }
 
 .genre-card-practice-btn {
   flex-shrink: 0;
-  padding: 7px 14px;
-  font-size: 12px;
+  padding: 9px 18px;
+  font-size: 13px;
 }
 
 .gc-due  { color: var(--accent); font-weight: 500; }

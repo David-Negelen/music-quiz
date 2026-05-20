@@ -667,7 +667,7 @@ function renderGenreGrid() {
     genreSongs[g].push(s);
   }
 
-  const genres = Object.keys(genreSongs).sort((a, b) => {
+  const genres = Object.keys(genreSongs).filter(g => genreSongs[g].length >= 10).sort((a, b) => {
     if (a === '__unknown__') return 1;
     if (b === '__unknown__') return -1;
     return genreSongs[b].length - genreSongs[a].length;
