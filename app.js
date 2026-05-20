@@ -1232,123 +1232,59 @@ function fireConfetti() {
   requestAnimationFrame(frame);
 }
 
-// ── Chart Import ─────────────────────────────────────────────────────────
+// ── All-Time Import (Last.fm) ─────────────────────────────────────────────
 
-async function fetchChartSongs(genreId, limit) {
-  const base = `https://itunes.apple.com/us/rss/topsongs/limit=${limit}`;
-  const url = genreId ? `${base}/genre=${genreId}/json` : `${base}/json`;
-  const rssRes = await fetch(url);
-  if (!rssRes.ok) throw new Error('Chart unavailable');
-  const rssData = await rssRes.json();
-  const entries = rssData.feed?.entry || [];
-
-  // Extract track IDs — prefer ?i= from the link URL, fall back to im:id attribute
-  const ids = entries.map(e => {
-    const link = e.id?.label || '';
-    const m = link.match(/[?&]i=(\d+)/);
-    return m ? m[1] : e.id?.attributes?.['im:id'];
-  }).filter(Boolean);
-
-  if (!ids.length) return [];
-
-  // Batch lookup in chunks (iTunes caps URL length)
-  const songs = [];
-  const CHUNK = 50;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const chunk = ids.slice(i, i + CHUNK);
-    const res = await fetch(`https://itunes.apple.com/lookup?id=${chunk.join(',')}`);
-    if (!res.ok) continue;
-    const data = await res.json();
-    for (const r of data.results || []) {
-      if (r.kind === 'song' && r.previewUrl) {
-        songs.push({
-          id:         r.trackId,
-          title:      r.trackName,
-          artist:     r.artistName,
-          album:      r.collectionName || '',
-          year:       r.releaseDate ? r.releaseDate.slice(0, 4) : '????',
-          previewUrl: r.previewUrl,
-          artwork:    (r.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
-          genre:      r.primaryGenreName || '',
-        });
-      }
-    }
-  }
-  return songs;
+async function fetchLastFmTracks(tag, limit, apiKey) {
+  const url = `https://ws.audioscrobbler.com/2.0/?method=tag.gettoptracks&tag=${encodeURIComponent(tag)}&api_key=${encodeURIComponent(apiKey)}&format=json&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Last.fm request failed');
+  const data = await res.json();
+  if (data.error) throw new Error(data.message || 'Last.fm error');
+  const tracks = data.tracks?.track || [];
+  return tracks.map(t => ({ title: t.name, artist: t.artist?.name || '' })).filter(t => t.title && t.artist);
 }
 
-async function runChartImport() {
-  const genreId = document.getElementById('chart-genre').value;
-  const limit   = parseInt(document.getElementById('chart-count').value, 10);
+async function runAllTimeImport() {
+  const tag    = document.getElementById('chart-genre').value;
+  const limit  = parseInt(document.getElementById('chart-count').value, 10);
+  const keyEl  = document.getElementById('lastfm-key');
+  const apiKey = keyEl.value.trim();
+
+  if (!apiKey) {
+    keyEl.focus();
+    return;
+  }
+  localStorage.setItem('musik-quiz-lastfm-key', apiKey);
 
   const progressEl   = document.getElementById('import-progress');
-  const progressFill = document.getElementById('import-progress-fill');
   const statusEl     = document.getElementById('import-status');
-  const resultEl     = document.getElementById('import-result');
+  const progressFill = document.getElementById('import-progress-fill');
   const runBtn       = document.getElementById('import-run-btn');
   const cancelBtn    = document.getElementById('import-cancel-btn');
 
   progressEl.style.display = 'block';
-  resultEl.style.display   = 'none';
-  runBtn.disabled          = true;
-  cancelBtn.disabled       = true;
-  progressFill.style.width = '5%';
-  statusEl.textContent     = 'Fetching chart from iTunes…';
+  document.getElementById('import-result').style.display = 'none';
+  runBtn.disabled = cancelBtn.disabled = true;
+  progressFill.style.width = '0%';
+  statusEl.textContent = 'Fetching Last.fm chart…';
 
-  let songs;
+  let entries;
   try {
-    songs = await fetchChartSongs(genreId, limit);
-  } catch {
-    statusEl.textContent = 'Could not fetch chart. Check your connection and try again.';
+    entries = await fetchLastFmTracks(tag, limit, apiKey);
+  } catch (e) {
+    statusEl.textContent = `Failed: ${e.message}`;
     runBtn.disabled = cancelBtn.disabled = false;
     return;
   }
 
-  if (!songs.length) {
-    statusEl.textContent = 'No songs with previews found on this chart.';
+  if (!entries.length) {
+    statusEl.textContent = 'No tracks found for this genre.';
     runBtn.disabled = cancelBtn.disabled = false;
     return;
   }
 
-  let added = 0, skipped = 0;
-
-  for (let i = 0; i < songs.length; i++) {
-    const song = songs[i];
-    progressFill.style.width = `${5 + ((i + 1) / songs.length) * 95}%`;
-    statusEl.textContent = `Adding ${i + 1} / ${songs.length}: ${song.artist} – ${song.title}`;
-
-    if (inLibrary(song.id)) { skipped++; continue; }
-
-    state.library.push(song);
-    try {
-      await fetch('/api/songs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(song),
-      });
-      added++;
-    } catch {
-      state.library = state.library.filter(s => s.id !== song.id);
-    }
-  }
-
-  renderLibrary();
-  updateLibraryStatus();
-
-  progressFill.style.width = '100%';
-  statusEl.textContent = 'Done.';
-
-  let msg = `Added ${added} song${added !== 1 ? 's' : ''}`;
-  if (skipped) msg += `, ${skipped} already in library`;
-  msg += '.';
-  resultEl.className   = `import-result ${added > 0 ? 'success' : 'partial'}`;
-  resultEl.textContent = msg;
-  resultEl.style.display = 'block';
-
-  runBtn.disabled    = false;
-  runBtn.textContent = 'Close';
-  runBtn.onclick     = closeModal;
-  cancelBtn.disabled = false;
+  // Hand off to the existing bulk import — it handles iTunes lookup, rate-limiting, and progress UI
+  runBulkImport(entries);
 }
 
 // ── Bulk Import ───────────────────────────────────────────────────────────
@@ -1570,6 +1506,8 @@ function openModal(startTab) {
   document.getElementById('import-run-btn').textContent = 'Import';
   document.getElementById('import-run-btn').onclick = handleImportRun;
   document.getElementById('import-cancel-btn').disabled = false;
+  const savedKey = localStorage.getItem('musik-quiz-lastfm-key') || '';
+  document.getElementById('lastfm-key').value = savedKey;
   switchImportTab(startTab || 'paste');
 }
 
@@ -1610,7 +1548,7 @@ let pendingFileEntries = null;
 function handleImportRun() {
   const activeTab = document.querySelector('.import-tab.active').dataset.tab;
 
-  if (activeTab === 'charts') { runChartImport(); return; }
+  if (activeTab === 'charts') { runAllTimeImport(); return; }
 
   let entries = [];
 

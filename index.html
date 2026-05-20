@@ -198,7 +198,7 @@
       <div class="import-tabs">
         <button class="import-tab active" data-tab="paste">Paste list</button>
         <button class="import-tab" data-tab="file">Apple Music file</button>
-        <button class="import-tab" data-tab="charts">Top Charts</button>
+        <button class="import-tab" data-tab="charts">All Time</button>
       </div>
 
       <!-- Paste tab -->
@@ -225,23 +225,24 @@
         </label>
       </div>
 
-      <!-- Charts tab -->
+      <!-- All Time tab -->
       <div id="import-tab-charts" class="import-tab-content">
-        <p class="import-hint">Import top songs directly from the iTunes charts.</p>
+        <p class="import-hint">Import all-time greatest songs by genre, ranked by total plays on Last.fm.</p>
         <div class="chart-options">
           <div class="chart-option-row">
             <label class="setting-label" for="chart-genre">Genre</label>
             <select id="chart-genre" class="library-sort-select chart-select">
-              <option value="">Overall Top</option>
-              <option value="18">Hip-Hop / Rap</option>
-              <option value="14">Pop</option>
-              <option value="21">Rock</option>
-              <option value="15">R&amp;B / Soul</option>
-              <option value="6">Country</option>
-              <option value="7">Electronic</option>
-              <option value="20">Alternative</option>
-              <option value="11">Jazz</option>
-              <option value="9">Classical</option>
+              <option value="hip-hop">Hip-Hop / Rap</option>
+              <option value="pop">Pop</option>
+              <option value="rock">Rock</option>
+              <option value="rnb">R&amp;B / Soul</option>
+              <option value="country">Country</option>
+              <option value="electronic">Electronic</option>
+              <option value="alternative">Alternative</option>
+              <option value="indie">Indie</option>
+              <option value="metal">Metal</option>
+              <option value="jazz">Jazz</option>
+              <option value="classical">Classical</option>
             </select>
           </div>
           <div class="chart-option-row">
@@ -250,10 +251,14 @@
               <option value="25">Top 25</option>
               <option value="50">Top 50</option>
               <option value="100" selected>Top 100</option>
-              <option value="200">Top 200</option>
             </select>
           </div>
+          <div class="chart-option-row">
+            <label class="setting-label" for="lastfm-key">Last.fm key</label>
+            <input id="lastfm-key" class="lastfm-key-input" type="text" placeholder="Paste API key…" autocomplete="off" spellcheck="false">
+          </div>
         </div>
+        <p class="import-hint chart-key-hint">Free key at <strong>last.fm/api/account/create</strong> — saved automatically.</p>
       </div>
 
       <div id="import-progress" style="display:none">
