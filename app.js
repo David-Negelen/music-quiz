@@ -675,6 +675,19 @@ function renderGenreGrid() {
 
   let expandedGenre = null;
 
+  const today = new Date().toISOString().slice(0, 10);
+
+  function songStatus(s) {
+    const isNew = !s.srDue_title && !s.srDue_artist && !s.srDue_year;
+    if (isNew) return 'new';
+    const anyDue = ['title', 'artist', 'year'].some(f => { const d = s[`srDue_${f}`]; return d && d <= today; });
+    if (anyDue) return 'due';
+    const allLearned = s.srReviews_title >= 3 && s.srReviews_artist >= 3 && s.srReviews_year >= 3;
+    return allLearned ? 'learned' : 'not-due';
+  }
+
+  const statusOrder = { due: 0, new: 1, 'not-due': 2, learned: 3 };
+
   function renderCards() {
     grid.innerHTML = genres.map(g => {
       const songs = genreSongs[g];
@@ -691,26 +704,41 @@ function renderGenreGrid() {
 
       const expandedHtml = isExpanded ? `
         <div class="genre-card-detail">
-          <div class="gc-stat-row">
-            <div class="gc-stat"><span class="gc-stat-num">${st.total}</span><span class="gc-stat-label">songs</span></div>
-            <div class="gc-stat"><span class="gc-stat-num gc-new">${st.new}</span><span class="gc-stat-label">new</span></div>
-            <div class="gc-stat"><span class="gc-stat-num gc-due">${st.due}</span><span class="gc-stat-label">due</span></div>
-            <div class="gc-stat"><span class="gc-stat-num">${st.notDue}</span><span class="gc-stat-label">not due</span></div>
-            <div class="gc-stat"><span class="gc-stat-num gc-ok">${st.learned}</span><span class="gc-stat-label">learned</span></div>
-          </div>
-          <div class="gc-mastery-bar-wrap">
-            <div class="gc-mastery-bar">
-              <div class="gc-mastery-fill" style="width:${masteryPct}%"></div>
+          <div class="gc-top-row">
+            <div class="gc-stat-row">
+              <div class="gc-stat"><span class="gc-stat-num">${st.total}</span><span class="gc-stat-label">songs</span></div>
+              <div class="gc-stat"><span class="gc-stat-num gc-new">${st.new}</span><span class="gc-stat-label">new</span></div>
+              <div class="gc-stat"><span class="gc-stat-num gc-due">${st.due}</span><span class="gc-stat-label">due</span></div>
+              <div class="gc-stat"><span class="gc-stat-num">${st.notDue}</span><span class="gc-stat-label">not due</span></div>
+              <div class="gc-stat"><span class="gc-stat-num gc-ok">${st.learned}</span><span class="gc-stat-label">learned</span></div>
             </div>
-            <span class="gc-mastery-label">${masteryPct}% mastered</span>
+            <div class="gc-mastery-bar-wrap">
+              <div class="gc-mastery-bar"><div class="gc-mastery-fill" style="width:${masteryPct}%"></div></div>
+              <span class="gc-mastery-label">${masteryPct}% mastered</span>
+            </div>
           </div>
-          <button class="genre-card-practice-btn btn-primary" data-genre="${esc(g)}">Practice ${esc(label)}</button>
+          <div class="gc-song-list">
+            ${[...songs].sort((a, b) => statusOrder[songStatus(a)] - statusOrder[songStatus(b)]).map(s => {
+              const status = songStatus(s);
+              return `<div class="gc-song-row">
+                <img class="gc-song-art" src="${esc(s.artwork || '')}" alt="" width="32" height="32" onerror="this.style.display='none'">
+                <div class="gc-song-info">
+                  <span class="gc-song-title">${esc(s.title)}</span>
+                  <span class="gc-song-artist">${esc(s.artist)}</span>
+                </div>
+                <span class="gc-song-status gc-song-status--${status}">${status === 'not-due' ? 'not due' : status}</span>
+              </div>`;
+            }).join('')}
+          </div>
         </div>` : '';
 
       return `<div class="genre-card${isExpanded ? ' expanded' : ''}" data-genre="${esc(g)}">
         <div class="genre-card-main">
-          <div class="genre-card-name">${esc(label)}</div>
-          <div class="genre-card-summary">${st.total} songs · ${summaryStats}</div>
+          <div class="genre-card-text">
+            <div class="genre-card-name">${esc(label)}</div>
+            <div class="genre-card-summary">${st.total} songs · ${summaryStats}</div>
+          </div>
+          <button class="genre-card-practice-btn btn-primary" data-genre="${esc(g)}">Practice</button>
         </div>
         ${expandedHtml}
       </div>`;

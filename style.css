@@ -568,18 +568,32 @@ body {
 .genre-card.expanded { border-color: var(--accent); grid-column: 1 / -1; cursor: default; }
 
 .genre-card-main {
-  padding: 18px 18px 16px;
+  padding: 16px 16px 14px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .genre-card.expanded .genre-card-main { border-bottom: 0.5px solid var(--border); }
 
+.genre-card-text { flex: 1; min-width: 0; }
+
 .genre-card-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-1);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.genre-card-summary { font-size: 13px; color: var(--text-2); }
+.genre-card-summary { font-size: 12px; color: var(--text-2); }
+
+.genre-card-practice-btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  font-size: 12px;
+}
 
 .gc-due  { color: var(--accent); font-weight: 500; }
 .gc-new  { color: #60a5fa; font-weight: 500; }
@@ -587,15 +601,22 @@ body {
 
 /* Expanded detail */
 .genre-card-detail {
-  padding: 20px 18px;
+  padding: 18px 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+}
+
+.gc-top-row {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  flex-wrap: wrap;
 }
 
 .gc-stat-row {
   display: flex;
-  gap: 32px;
+  gap: 28px;
   flex-wrap: wrap;
 }
 .gc-stat {
@@ -604,7 +625,7 @@ body {
   gap: 2px;
 }
 .gc-stat-num {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-1);
   line-height: 1;
@@ -619,11 +640,13 @@ body {
 .gc-mastery-bar-wrap {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 200px;
+  flex: 1;
 }
 .gc-mastery-bar {
   flex: 1;
-  height: 6px;
+  height: 5px;
   background: var(--surface-2);
   border-radius: 3px;
   overflow: hidden;
@@ -632,14 +655,74 @@ body {
   height: 100%;
   background: var(--accent);
   border-radius: 3px;
-  transition: width 0.4s ease;
 }
 .gc-mastery-label { font-size: 12px; color: var(--text-2); white-space: nowrap; }
 
-.genre-card-practice-btn {
-  align-self: flex-start;
-  padding: 10px 24px;
+/* Song list inside expanded card */
+.gc-song-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 2px;
+  max-height: 360px;
+  overflow-y: auto;
+  border-top: 0.5px solid var(--border);
+  padding-top: 12px;
 }
+.gc-song-list::-webkit-scrollbar { width: 4px; }
+.gc-song-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.gc-song-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.gc-song-row:hover { background: rgba(255,255,255,0.04); }
+
+.gc-song-art {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-2);
+}
+.gc-song-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.gc-song-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gc-song-artist {
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gc-song-status {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.gc-song-status--due     { color: var(--accent); background: rgba(239,68,68,0.12); }
+.gc-song-status--new     { color: #60a5fa; background: rgba(96,165,250,0.12); }
+.gc-song-status--not-due { color: var(--text-2); background: rgba(255,255,255,0.06); }
+.gc-song-status--learned { color: #4ade80; background: rgba(74,222,128,0.12); }
 
 #genre-backfill-row {
   display: flex;
