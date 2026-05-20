@@ -639,69 +639,70 @@ async function backfillGenres() {
   }
 
   if (statusEl) statusEl.textContent = `Done — fixed ${fixed}${failed ? `, ${failed} not found` : ''}.`;
-  renderGenreFilter();
+  renderGenreGrid();
 }
 
-function renderGenreFilter() {
-  const group = document.getElementById('genre-filter-group');
-  const container = document.getElementById('genre-checkboxes');
-  if (!group || !container) return;
+function renderGenreGrid() {
+  const grid = document.getElementById('genre-grid');
+  if (!grid) return;
 
-  // Collect genres from library
-  const counts = {};
+  const today = new Date().toISOString().slice(0, 10);
+
+  const genreSongs = {};
   for (const s of state.library) {
     const g = s.genre || '__unknown__';
-    counts[g] = (counts[g] || 0) + 1;
+    if (!genreSongs[g]) genreSongs[g] = [];
+    genreSongs[g].push(s);
   }
-  const genres = Object.keys(counts).sort((a, b) => {
+
+  const genres = Object.keys(genreSongs).sort((a, b) => {
     if (a === '__unknown__') return 1;
     if (b === '__unknown__') return -1;
-    return a.localeCompare(b);
+    // Sort by song count descending
+    return genreSongs[b].length - genreSongs[a].length;
   });
 
-  if (genres.length <= 1) { group.style.display = 'none'; return; }
-  group.style.display = 'block';
-
-  // Persist excluded genres so new genres are checked by default
-  let excluded;
-  try { excluded = JSON.parse(localStorage.getItem('musik-quiz-genres-excluded')); } catch {}
-  const excludedSet = excluded ? new Set(excluded) : new Set();
-
-  const unknownCount = counts['__unknown__'] || 0;
-
-  const checkboxesHtml = genres.map(g => {
+  grid.innerHTML = genres.map(g => {
+    const songs = genreSongs[g];
+    const count = songs.length;
+    const due = songs.filter(s => {
+      const isNew = !s.srDue_title && !s.srDue_artist && !s.srDue_year;
+      if (isNew) return true;
+      return ['title', 'artist', 'year'].some(f => {
+        const d = s[`srDue_${f}`];
+        return d && d <= today;
+      });
+    }).length;
     const label = g === '__unknown__' ? 'Unknown' : g;
-    const checked = !excludedSet.has(g);
-    return `<label class="checkbox-label">
-      <input type="checkbox" class="genre-cb" value="${esc(g)}" ${checked ? 'checked' : ''}>
-      <span>${esc(label)} <span class="genre-count">(${counts[g]})</span></span>
-    </label>`;
+    const dueHtml = due > 0
+      ? `<span class="genre-card-due">${due} due</span>`
+      : `<span class="genre-card-ok">up to date</span>`;
+    return `<div class="genre-card">
+      <div class="genre-card-name">${esc(label)}</div>
+      <div class="genre-card-stats"><span class="genre-card-count">${count}</span> songs · ${dueHtml}</div>
+      <button class="genre-card-btn" data-genre="${esc(g)}">Practice</button>
+    </div>`;
   }).join('');
 
-  const backfillHtml = unknownCount > 0 ? `
-    <div class="genre-backfill-row" style="grid-column: 1 / -1">
-      <button id="genre-backfill-btn" class="btn-ghost btn-sm">Fix ${unknownCount} unknown genres</button>
-      <span id="genre-backfill-status" class="genre-backfill-status"></span>
-    </div>` : '';
+  grid.querySelectorAll('.genre-card-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.quizConfig = { count: null, genres: [btn.dataset.genre] };
+      startSession();
+    });
+  });
 
-  container.innerHTML = `<div class="genre-scroll">${checkboxesHtml}${backfillHtml}</div>`;
-
-  function saveExcluded() {
-    const exc = [...container.querySelectorAll('.genre-cb')].filter(c => !c.checked).map(c => c.value);
-    localStorage.setItem('musik-quiz-genres-excluded', JSON.stringify(exc));
+  const unknownCount = genreSongs['__unknown__']?.length || 0;
+  const backfillRow = document.getElementById('genre-backfill-row');
+  const backfillBtn = document.getElementById('genre-backfill-btn');
+  if (backfillRow && backfillBtn) {
+    if (unknownCount > 0) {
+      backfillRow.style.display = 'flex';
+      backfillBtn.textContent = `Fix ${unknownCount} unknown genres`;
+      backfillBtn.onclick = backfillGenres;
+    } else {
+      backfillRow.style.display = 'none';
+    }
   }
-
-  container.querySelectorAll('.genre-cb').forEach(cb => cb.addEventListener('change', saveExcluded));
-  document.getElementById('genre-backfill-btn')?.addEventListener('click', backfillGenres);
-
-  document.getElementById('genre-all-btn')?.addEventListener('click', () => {
-    container.querySelectorAll('.genre-cb').forEach(cb => { cb.checked = true; });
-    saveExcluded();
-  });
-  document.getElementById('genre-none-btn')?.addEventListener('click', () => {
-    container.querySelectorAll('.genre-cb').forEach(cb => { cb.checked = false; });
-    saveExcluded();
-  });
 }
 
 function updateLibraryStatus() {
@@ -711,7 +712,7 @@ function updateLibraryStatus() {
   else if (n < 2) el.textContent = `${n} song in library — add at least one more to start.`;
   else el.textContent = `${n} songs in library.`;
   renderMasteryOverview();
-  renderGenreFilter();
+  renderGenreGrid();
 }
 
 // ── Render: Study Question ────────────────────────────────────────────────
@@ -1652,19 +1653,7 @@ async function startSession() {
   }
   setupError.style.display = 'none';
 
-  const studyAllCheckbox = document.getElementById('study-all');
-  const studyAll = studyAllCheckbox ? studyAllCheckbox.checked : true;
-  const count = studyAll ? null : parseInt(document.getElementById('q-count').textContent, 10);
-
-  const genreBoxes = document.querySelectorAll('.genre-cb');
-  let genres = null;
-  if (genreBoxes.length > 0) {
-    const checked = [...genreBoxes].filter(cb => cb.checked).map(cb => cb.value);
-    // null means all — only filter if not everything is checked
-    if (checked.length < genreBoxes.length) genres = checked;
-  }
-
-  state.quizConfig = { count, genres };
+  if (!state.quizConfig) state.quizConfig = { count: null, genres: null };
   state.preMastery = {};
   state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
 
@@ -1740,7 +1729,7 @@ async function init() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       showView(btn.dataset.view);
-      if (btn.dataset.view === 'quiz-setup') { renderMasteryOverview(); renderGenreFilter(); }
+      if (btn.dataset.view === 'quiz-setup') { renderMasteryOverview(); renderGenreGrid(); }
       if (btn.dataset.view === 'stats')      renderStats();
     });
   });
@@ -1839,27 +1828,6 @@ async function init() {
   });
 
 
-  // Songs per session picker
-  let qCount = 10;
-  const qCountEl = document.getElementById('q-count');
-  const studyAllCheckbox = document.getElementById('study-all');
-  const countPicker = document.getElementById('count-picker');
-
-  function updateCountDisplay() { qCountEl.textContent = qCount; }
-
-  if (studyAllCheckbox) {
-    studyAllCheckbox.addEventListener('change', () => {
-      countPicker.style.display = studyAllCheckbox.checked ? 'none' : 'flex';
-    });
-  }
-
-  document.getElementById('q-minus').addEventListener('click', () => {
-    if (qCount > 1) { qCount--; updateCountDisplay(); }
-  });
-  document.getElementById('q-plus').addEventListener('click', () => {
-    if (qCount < 200) { qCount++; updateCountDisplay(); }
-  });
-
   // Volume slider
   const volumeSlider = document.getElementById('volume-slider');
   if (volumeSlider) {
@@ -1869,8 +1837,11 @@ async function init() {
     });
   }
 
-  // Start session
-  document.getElementById('start-quiz-btn').addEventListener('click', startSession);
+  // Practice All button
+  document.getElementById('start-quiz-btn').addEventListener('click', () => {
+    state.quizConfig = { count: null, genres: null };
+    startSession();
+  });
 
   // Next question
   document.getElementById('next-btn').addEventListener('click', advanceQuiz);
@@ -1885,6 +1856,7 @@ async function init() {
   // Review screen
   document.getElementById('back-quiz-btn').addEventListener('click', () => {
     renderMasteryOverview();
+    renderGenreGrid();
     showView('quiz-setup');
   });
 
@@ -1898,7 +1870,7 @@ async function init() {
     const hash = window.location.hash.slice(1);
     if (['library', 'stats', 'quiz-setup'].includes(hash)) {
       showView(hash);
-      if (hash === 'quiz-setup') { renderMasteryOverview(); renderGenreFilter(); }
+      if (hash === 'quiz-setup') { renderMasteryOverview(); renderGenreGrid(); }
       if (hash === 'stats') renderStats();
     }
   }

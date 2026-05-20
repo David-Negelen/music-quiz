@@ -54,38 +54,16 @@
 
     <!-- Quiz Setup View -->
     <section id="view-quiz-setup" class="view">
-      <div class="setup-card">
-        <h2>Quiz Settings</h2>
-
-        <div class="setting-group">
-          <label class="setting-label">Songs per session</label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="study-all" checked>
-            <span>All songs (weakest first)</span>
-          </label>
-          <div class="number-picker" id="count-picker" style="display:none">
-            <button class="picker-btn" id="q-minus">−</button>
-            <span id="q-count">10</span>
-            <button class="picker-btn" id="q-plus">+</button>
-          </div>
-        </div>
-
-        <div class="setting-group" id="genre-filter-group" style="display:none">
-          <div class="genre-filter-header">
-            <label class="setting-label">Genres</label>
-            <div class="genre-filter-actions">
-              <button id="genre-all-btn" class="btn-ghost btn-sm">All</button>
-              <button id="genre-none-btn" class="btn-ghost btn-sm">None</button>
-            </div>
-          </div>
-          <div id="genre-checkboxes"></div>
-        </div>
-
+      <div class="genre-grid" id="genre-grid"></div>
+      <div id="genre-backfill-row" style="display:none">
+        <button id="genre-backfill-btn" class="btn-ghost btn-sm"></button>
+        <span id="genre-backfill-status" class="genre-backfill-status"></span>
+      </div>
+      <div class="quiz-setup-footer">
         <div id="mastery-overview" class="mastery-overview"></div>
-
         <p id="library-status" class="hint"></p>
         <div id="setup-error" class="error-msg" style="display:none"></div>
-        <button id="start-quiz-btn" class="btn-primary btn-lg">Start Session</button>
+        <button id="start-quiz-btn" class="btn-primary btn-lg">Practice All</button>
       </div>
     </section>
 
