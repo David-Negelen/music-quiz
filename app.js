@@ -187,6 +187,7 @@ async function loadLibrary() {
       year:       r.year != null ? String(r.year) : '????',
       artwork:    r.artwork_url || '',
       previewUrl: r.preview_url || '',
+      genre:      r.genre || '',
       // Per-field SR for title
       srInterval_title: r.sr_interval_title || 0,
       srEase_title:     r.sr_ease_title     || 2.5,
@@ -294,6 +295,7 @@ async function searchSongs(query) {
         year: r.releaseDate ? r.releaseDate.slice(0, 4) : '????',
         previewUrl: r.previewUrl,
         artwork: (r.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
+        genre: r.primaryGenreName || '',
       }));
 
   // Artist-matched results first, then general — deduplicate by id
@@ -353,11 +355,12 @@ function shuffle(arr) {
 }
 
 async function buildStudySession() {
-  const { count } = state.quizConfig;
-  
+  const { count, genres } = state.quizConfig;
+
   try {
     const qs = new URLSearchParams();
     if (count !== null) qs.append('count', count);
+    if (genres !== null) qs.append('genres', genres.join(','));
     const res = await fetch(`/api/songs/queue?${qs}`);
     const data = await res.json();
     const songs = data.queue || [];
@@ -376,6 +379,7 @@ async function buildStudySession() {
         year:       raw.year != null ? String(raw.year) : '????',
         artwork:    raw.artwork_url || '',
         previewUrl: raw.preview_url || '',
+        genre:      raw.genre || '',
         srInterval_title: raw.sr_interval_title || 0,
         srEase_title:     raw.sr_ease_title     || 2.5,
         srDue_title:      raw.sr_due_title      || null,
@@ -1222,6 +1226,7 @@ async function searchBestMatch({ artist, title }) {
         year: r.releaseDate ? r.releaseDate.slice(0, 4) : '????',
         previewUrl: r.previewUrl,
         artwork: (r.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
+        genre: r.primaryGenreName || '',
       };
     } catch { /* network blip — retry */ }
   }
@@ -1471,7 +1476,15 @@ async function startSession() {
   const studyAll = studyAllCheckbox ? studyAllCheckbox.checked : true;
   const count = studyAll ? null : parseInt(document.getElementById('q-count').textContent, 10);
 
-  state.quizConfig = { count };
+  const genreBoxes = document.querySelectorAll('.genre-cb');
+  let genres = null;
+  if (genreBoxes.length > 0) {
+    const checked = [...genreBoxes].filter(cb => cb.checked).map(cb => cb.value);
+    // null means all — only filter if not everything is checked
+    if (checked.length < genreBoxes.length) genres = checked;
+  }
+
+  state.quizConfig = { count, genres };
   state.preMastery = {};
   state.library.forEach(s => { state.preMastery[String(s.id)] = getMastery(s.id); });
 

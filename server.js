@@ -82,6 +82,9 @@ for (const [col, def] of perFieldSRCols) {
   try { db.prepare(`ALTER TABLE songs ADD COLUMN ${col} ${def}`).run(); } catch {}
 }
 
+// Migrate: add genre column
+try { db.prepare('ALTER TABLE songs ADD COLUMN genre TEXT DEFAULT NULL').run(); } catch {}
+
 // Migrate data from old columns to per-field columns if old columns have data
 try {
   const rows = db.prepare('SELECT id, sr_interval, sr_ease, sr_due, sr_reviews FROM songs WHERE sr_interval > 0 OR sr_ease != 2.5 OR sr_due IS NOT NULL OR sr_reviews > 0').all();
@@ -133,8 +136,8 @@ const stmts = {
   allSongs:    db.prepare('SELECT * FROM songs ORDER BY added_at DESC'),
   getSong:     db.prepare('SELECT * FROM songs WHERE id = ?'),
   insertSong:  db.prepare(`
-    INSERT OR IGNORE INTO songs (id, title, artist, year, artwork_url, preview_url)
-    VALUES (@id, @title, @artist, @year, @artwork_url, @preview_url)
+    INSERT OR IGNORE INTO songs (id, title, artist, year, artwork_url, preview_url, genre)
+    VALUES (@id, @title, @artist, @year, @artwork_url, @preview_url, @genre)
   `),
   deleteSong:  db.prepare('DELETE FROM songs WHERE id = ?'),
   newSession:  db.prepare('INSERT INTO sessions DEFAULT VALUES'),
@@ -246,6 +249,7 @@ async function handlePostSong(req, res) {
     year:        parseInt(String(body.releaseDate || body.year || '').slice(0, 4)) || null,
     artwork_url: (body.artworkUrl100 || body.artwork || '').replace('100x100bb', '300x300bb'),
     preview_url: body.previewUrl || null,
+    genre:       body.primaryGenreName || body.genre || null,
   };
   stmts.insertSong.run(row);
   return json(res, 201, stmts.getSong.get(row.id));
@@ -432,9 +436,14 @@ function handleGetQueue(req, res) {
   const countParam = qs.get('count');
   const count = countParam ? Math.max(1, parseInt(countParam)) : 0; // 0 means all
   
-  const songs = db.prepare('SELECT * FROM songs ORDER BY added_at DESC').all();
+  const genresParam = qs.get('genres');
+  let songs = db.prepare('SELECT * FROM songs ORDER BY added_at DESC').all();
+  if (genresParam) {
+    const allowed = new Set(genresParam.split(','));
+    songs = songs.filter(s => allowed.has(s.genre || '__unknown__'));
+  }
   const today = new Date().toISOString().split('T')[0];
-  
+
   console.log(`Queue request: countParam=${countParam}, count=${count}, songs_returned=${songs.length}`);
   
   // Edge case: fewer than 10 songs
