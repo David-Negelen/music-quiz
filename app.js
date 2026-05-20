@@ -594,6 +594,50 @@ function renderMasteryOverview() {
   el.innerHTML = `<p class="sr-due-line">Due today: <span class="sr-due-count">${dueToday}</span> &nbsp;·&nbsp; New: <span class="sr-due-count">${newSongs}</span> &nbsp;·&nbsp; Learned: <span class="sr-due-count">${learned}</span> &nbsp;·&nbsp; Not due: <span class="sr-due-count">${notDue}</span></p>`;
 }
 
+function renderGenreFilter() {
+  const group = document.getElementById('genre-filter-group');
+  const container = document.getElementById('genre-checkboxes');
+  if (!group || !container) return;
+
+  // Collect genres from library
+  const counts = {};
+  for (const s of state.library) {
+    const g = s.genre || '__unknown__';
+    counts[g] = (counts[g] || 0) + 1;
+  }
+  const genres = Object.keys(counts).sort((a, b) => {
+    if (a === '__unknown__') return 1;
+    if (b === '__unknown__') return -1;
+    return a.localeCompare(b);
+  });
+
+  // Hide if only one distinct genre bucket
+  if (genres.length <= 1) { group.style.display = 'none'; return; }
+  group.style.display = 'block';
+
+  // Restore saved selection from localStorage
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('musik-quiz-genres')); } catch {}
+  const savedSet = saved ? new Set(saved) : null;
+
+  container.innerHTML = genres.map(g => {
+    const label = g === '__unknown__' ? 'Unknown' : g;
+    const checked = savedSet ? savedSet.has(g) : true;
+    return `<label class="checkbox-label">
+      <input type="checkbox" class="genre-cb" value="${esc(g)}" ${checked ? 'checked' : ''}>
+      <span>${esc(label)} <span class="genre-count">(${counts[g]})</span></span>
+    </label>`;
+  }).join('');
+
+  // Save selection on change
+  container.querySelectorAll('.genre-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = [...container.querySelectorAll('.genre-cb')].filter(c => c.checked).map(c => c.value);
+      localStorage.setItem('musik-quiz-genres', JSON.stringify(checked));
+    });
+  });
+}
+
 function updateLibraryStatus() {
   const el = document.getElementById('library-status');
   const n = state.library.length;
@@ -601,6 +645,7 @@ function updateLibraryStatus() {
   else if (n < 2) el.textContent = `${n} song in library — add at least one more to start.`;
   else el.textContent = `${n} songs in library.`;
   renderMasteryOverview();
+  renderGenreFilter();
 }
 
 // ── Render: Study Question ────────────────────────────────────────────────

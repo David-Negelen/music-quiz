@@ -528,6 +528,8 @@ body {
   background-repeat: no-repeat;
 }
 
+.genre-count { color: var(--text-2); font-size: 0.85em; }
+
 /* ── Active Quiz ─────────────────────────────────────────────────────────── */
 
 .quiz-header {
