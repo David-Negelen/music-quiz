@@ -54,16 +54,20 @@
 
     <!-- Quiz Setup View -->
     <section id="view-quiz-setup" class="view">
+      <div class="quiz-setup-header">
+        <div class="quiz-setup-header-left">
+          <div id="mastery-overview" class="mastery-overview"></div>
+          <p id="library-status" class="hint"></p>
+        </div>
+        <div class="quiz-setup-header-right">
+          <div id="setup-error" class="error-msg" style="display:none"></div>
+          <button id="start-quiz-btn" class="btn-primary btn-lg">Practice All</button>
+        </div>
+      </div>
       <div class="genre-grid" id="genre-grid"></div>
       <div id="genre-backfill-row" style="display:none">
         <button id="genre-backfill-btn" class="btn-ghost btn-sm"></button>
         <span id="genre-backfill-status" class="genre-backfill-status"></span>
-      </div>
-      <div class="quiz-setup-footer">
-        <div id="mastery-overview" class="mastery-overview"></div>
-        <p id="library-status" class="hint"></p>
-        <div id="setup-error" class="error-msg" style="display:none"></div>
-        <button id="start-quiz-btn" class="btn-primary btn-lg">Practice All</button>
       </div>
     </section>
 

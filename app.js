@@ -642,11 +642,23 @@ async function backfillGenres() {
   renderGenreGrid();
 }
 
+function genreStats(songs) {
+  const today = new Date().toISOString().slice(0, 10);
+  let newCount = 0, due = 0, learned = 0, notDue = 0;
+  for (const s of songs) {
+    const isNew = !s.srDue_title && !s.srDue_artist && !s.srDue_year;
+    if (isNew) { newCount++; continue; }
+    const anyDue = ['title', 'artist', 'year'].some(f => { const d = s[`srDue_${f}`]; return d && d <= today; });
+    if (anyDue) { due++; continue; }
+    const allLearned = s.srReviews_title >= 3 && s.srReviews_artist >= 3 && s.srReviews_year >= 3;
+    if (allLearned) learned++; else notDue++;
+  }
+  return { total: songs.length, new: newCount, due, learned, notDue };
+}
+
 function renderGenreGrid() {
   const grid = document.getElementById('genre-grid');
   if (!grid) return;
-
-  const today = new Date().toISOString().slice(0, 10);
 
   const genreSongs = {};
   for (const s of state.library) {
@@ -658,38 +670,69 @@ function renderGenreGrid() {
   const genres = Object.keys(genreSongs).sort((a, b) => {
     if (a === '__unknown__') return 1;
     if (b === '__unknown__') return -1;
-    // Sort by song count descending
     return genreSongs[b].length - genreSongs[a].length;
   });
 
-  grid.innerHTML = genres.map(g => {
-    const songs = genreSongs[g];
-    const count = songs.length;
-    const due = songs.filter(s => {
-      const isNew = !s.srDue_title && !s.srDue_artist && !s.srDue_year;
-      if (isNew) return true;
-      return ['title', 'artist', 'year'].some(f => {
-        const d = s[`srDue_${f}`];
-        return d && d <= today;
-      });
-    }).length;
-    const label = g === '__unknown__' ? 'Unknown' : g;
-    const dueHtml = due > 0
-      ? `<span class="genre-card-due">${due} due</span>`
-      : `<span class="genre-card-ok">up to date</span>`;
-    return `<div class="genre-card">
-      <div class="genre-card-name">${esc(label)}</div>
-      <div class="genre-card-stats"><span class="genre-card-count">${count}</span> songs · ${dueHtml}</div>
-      <button class="genre-card-btn" data-genre="${esc(g)}">Practice</button>
-    </div>`;
-  }).join('');
+  let expandedGenre = null;
 
-  grid.querySelectorAll('.genre-card-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.quizConfig = { count: null, genres: [btn.dataset.genre] };
-      startSession();
+  function renderCards() {
+    grid.innerHTML = genres.map(g => {
+      const songs = genreSongs[g];
+      const st = genreStats(songs);
+      const label = g === '__unknown__' ? 'Unknown' : g;
+      const isExpanded = expandedGenre === g;
+      const masteryPct = st.total > 0 ? Math.round((st.learned / st.total) * 100) : 0;
+
+      const summaryStats = st.due > 0
+        ? `<span class="gc-due">${st.due} due</span>`
+        : st.new > 0
+          ? `<span class="gc-new">${st.new} new</span>`
+          : `<span class="gc-ok">up to date</span>`;
+
+      const expandedHtml = isExpanded ? `
+        <div class="genre-card-detail">
+          <div class="gc-stat-row">
+            <div class="gc-stat"><span class="gc-stat-num">${st.total}</span><span class="gc-stat-label">songs</span></div>
+            <div class="gc-stat"><span class="gc-stat-num gc-new">${st.new}</span><span class="gc-stat-label">new</span></div>
+            <div class="gc-stat"><span class="gc-stat-num gc-due">${st.due}</span><span class="gc-stat-label">due</span></div>
+            <div class="gc-stat"><span class="gc-stat-num">${st.notDue}</span><span class="gc-stat-label">not due</span></div>
+            <div class="gc-stat"><span class="gc-stat-num gc-ok">${st.learned}</span><span class="gc-stat-label">learned</span></div>
+          </div>
+          <div class="gc-mastery-bar-wrap">
+            <div class="gc-mastery-bar">
+              <div class="gc-mastery-fill" style="width:${masteryPct}%"></div>
+            </div>
+            <span class="gc-mastery-label">${masteryPct}% mastered</span>
+          </div>
+          <button class="genre-card-practice-btn btn-primary" data-genre="${esc(g)}">Practice ${esc(label)}</button>
+        </div>` : '';
+
+      return `<div class="genre-card${isExpanded ? ' expanded' : ''}" data-genre="${esc(g)}">
+        <div class="genre-card-main">
+          <div class="genre-card-name">${esc(label)}</div>
+          <div class="genre-card-summary">${st.total} songs · ${summaryStats}</div>
+        </div>
+        ${expandedHtml}
+      </div>`;
+    }).join('');
+
+    grid.querySelectorAll('.genre-card').forEach(card => {
+      card.querySelector('.genre-card-main').addEventListener('click', () => {
+        expandedGenre = expandedGenre === card.dataset.genre ? null : card.dataset.genre;
+        renderCards();
+      });
     });
-  });
+
+    grid.querySelectorAll('.genre-card-practice-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        state.quizConfig = { count: null, genres: [btn.dataset.genre] };
+        startSession();
+      });
+    });
+  }
+
+  renderCards();
 
   const unknownCount = genreSongs['__unknown__']?.length || 0;
   const backfillRow = document.getElementById('genre-backfill-row');

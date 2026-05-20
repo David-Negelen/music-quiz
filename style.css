@@ -30,9 +30,9 @@ body {
 }
 
 #app {
-  max-width: 680px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 16px 80px;
+  padding: 0 24px 80px;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -89,7 +89,12 @@ body {
 
 .view { display: none; }
 .view.active { display: block; }
-#view-quiz-setup.active { display: flex; flex-direction: column; overflow-y: auto; }
+#view-quiz-setup.active { display: flex; flex-direction: column; }
+
+/* Keep non-quiz views from stretching too wide */
+#view-library, #view-stats, #view-quiz-active, #view-results {
+  max-width: 680px;
+}
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 
@@ -529,69 +534,118 @@ body {
   background-repeat: no-repeat;
 }
 
-/* ── Genre Grid (Quiz Setup) ─────────────────────────────────────────────── */
+/* ── Quiz Setup ──────────────────────────────────────────────────────────── */
+
+.quiz-setup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0 20px;
+  flex-wrap: wrap;
+}
+.quiz-setup-header-left { display: flex; flex-direction: column; gap: 4px; }
+.quiz-setup-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+/* ── Genre Grid ──────────────────────────────────────────────────────────── */
 
 .genre-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
-  padding: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .genre-card {
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 14px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s;
 }
+.genre-card:hover { border-color: rgba(255,255,255,0.2); }
+.genre-card.expanded { border-color: var(--accent); grid-column: 1 / -1; cursor: default; }
+
+.genre-card-main {
+  padding: 18px 18px 16px;
+  cursor: pointer;
+}
+.genre-card.expanded .genre-card-main { border-bottom: 0.5px solid var(--border); }
 
 .genre-card-name {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-1);
-  line-height: 1.2;
+  margin-bottom: 6px;
 }
+.genre-card-summary { font-size: 13px; color: var(--text-2); }
 
-.genre-card-stats {
-  font-size: 12px;
-  color: var(--text-2);
-  flex: 1;
-}
+.gc-due  { color: var(--accent); font-weight: 500; }
+.gc-new  { color: #60a5fa; font-weight: 500; }
+.gc-ok   { color: var(--text-2); }
 
-.genre-card-count { color: var(--text-1); font-weight: 500; }
-.genre-card-due   { color: var(--accent); font-weight: 500; }
-.genre-card-ok    { color: var(--text-2); }
-
-.genre-card-btn {
-  margin-top: 4px;
-  padding: 6px 0;
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
-  background: transparent;
-  color: var(--text-1);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
-.genre-card-btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.25); }
-
-.quiz-setup-footer {
-  padding: 12px 16px 20px;
+/* Expanded detail */
+.genre-card-detail {
+  padding: 20px 18px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+}
+
+.gc-stat-row {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.gc-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gc-stat-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1;
+}
+.gc-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-2);
+}
+
+.gc-mastery-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gc-mastery-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.gc-mastery-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.gc-mastery-label { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+
+.genre-card-practice-btn {
+  align-self: flex-start;
+  padding: 10px 24px;
 }
 
 #genre-backfill-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 16px;
+  margin-bottom: 8px;
 }
 .genre-backfill-status { font-size: 0.85em; color: var(--text-2); }
 
