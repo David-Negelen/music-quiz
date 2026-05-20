@@ -1536,7 +1536,9 @@ async function startSession() {
   state.quizQuestions = await buildStudySession();
   
   if (!state.quizQuestions) {
-    setupError.textContent = 'No songs in queue. Your library may be too small.';
+    setupError.textContent = genres
+      ? 'No songs match the selected genres.'
+      : 'No songs in queue. Your library may be too small.';
     setupError.style.display = 'block';
     return;
   }
@@ -1603,7 +1605,7 @@ async function init() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       showView(btn.dataset.view);
-      if (btn.dataset.view === 'quiz-setup') renderMasteryOverview();
+      if (btn.dataset.view === 'quiz-setup') { renderMasteryOverview(); renderGenreFilter(); }
       if (btn.dataset.view === 'stats')      renderStats();
     });
   });
