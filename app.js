@@ -35,8 +35,8 @@ function startVisualizer() {
   canvas.height = (canvas.offsetHeight || 160) * dpr;
 
   const ctx2d = canvas.getContext('2d');
-  const N = 72;
-  const freq = Array.from({ length: N }, () => 0.6 + Math.random() * 0.8);
+  const N = 64;
+  const freq  = Array.from({ length: N }, () => 0.5 + Math.random() * 0.9);
   const phase = Array.from({ length: N }, () => Math.random() * Math.PI * 2);
   let t = 0;
 
@@ -44,31 +44,46 @@ function startVisualizer() {
     animFrameId = requestAnimationFrame(draw);
     const W = canvas.width;
     const H = canvas.height;
-    const gap = 2 * dpr;
+    const gap  = 2.5 * dpr;
     const barW = (W - gap * (N - 1)) / N;
 
     ctx2d.clearRect(0, 0, W, H);
 
-    ctx2d.fillStyle = 'rgba(252, 60, 68, 0.12)';
-    ctx2d.fillRect(0, H / 2 - dpr, W, 2 * dpr);
+    const isPlaying = !audio.paused;
+    const playhead  = (audio.duration && !isNaN(audio.duration))
+      ? audio.currentTime / audio.duration : 0;
 
-    if (audio.paused) return;
+    t += isPlaying ? 0.042 : 0.009;
 
-    t += 0.035;
-    const playhead = (audio.duration && !isNaN(audio.duration)) ? audio.currentTime / audio.duration : 0;
+    // Glow when playing
+    ctx2d.shadowBlur  = isPlaying ? 12 * dpr : 0;
+    ctx2d.shadowColor = 'rgba(255, 82, 82, 0.55)';
+
     for (let i = 0; i < N; i++) {
-      const v = Math.max(0.04,
-        (Math.sin(t * freq[i] + phase[i]) * 0.35 + 0.55) *
-        (Math.sin(t * freq[i] * 0.45 + phase[i] * 1.3) * 0.2 + 0.8)
-      );
-      const halfH = Math.max(2 * dpr, v * H * 0.44);
-      ctx2d.fillStyle = (i / N < playhead) ? '#ff5252' : 'rgba(255,82,82,0.28)';
+      const wave1 = Math.sin(t * freq[i] + phase[i]);
+      const wave2 = Math.sin(t * freq[i] * 0.42 + phase[i] * 1.4);
+      const v = isPlaying
+        ? Math.max(0.05, (wave1 * 0.42 + 0.58) * (wave2 * 0.22 + 0.78))
+        : Math.max(0.018, wave1 * 0.07 + 0.09);
+
+      const halfH  = Math.max(2 * dpr, v * H * 0.46);
+      const isPast = i / N < playhead;
+
+      ctx2d.fillStyle = isPlaying
+        ? (isPast ? 'rgba(255,82,82,0.92)' : 'rgba(255,82,82,0.25)')
+        : 'rgba(255,82,82,0.12)';
+
       ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
     }
-    // Playhead vertical line
-    const px = playhead * W;
-    ctx2d.fillStyle = '#ff5252';
-    ctx2d.fillRect(px - dpr, 0, 2 * dpr, H);
+
+    ctx2d.shadowBlur = 0;
+
+    // Playhead line
+    if (isPlaying && playhead > 0) {
+      const px = playhead * W;
+      ctx2d.fillStyle = 'rgba(255,82,82,0.85)';
+      ctx2d.fillRect(px - dpr, 0, 2 * dpr, H);
+    }
   }
 
   draw();
@@ -424,13 +439,35 @@ function startAudio(url) {
   const arc          = document.getElementById('timer-ring-arc');
   const circumference = 2 * Math.PI * 19;
 
-  if (arc) arc.style.strokeDashoffset = '0';
+  if (arc) { arc.style.strokeDashoffset = '0'; arc.style.stroke = 'var(--accent)'; }
+  const cdFillReset = document.getElementById('countdown-bar-fill');
+  if (cdFillReset) { cdFillReset.style.width = '100%'; cdFillReset.style.background = 'var(--accent)'; }
+
+  const cdFill = document.getElementById('countdown-bar-fill');
 
   function updateProgress() {
     if (!audio.duration) return;
-    const pct = audio.currentTime / audio.duration;
+    const pct  = audio.currentTime / audio.duration;
+    const left = 1 - pct;
+
     progressFill.style.width = `${pct * 100}%`;
-    if (arc) arc.style.strokeDashoffset = String(circumference * pct);
+
+    // Countdown bar — shrinks as song progresses, changes color for tension
+    if (cdFill) {
+      cdFill.style.width = `${left * 100}%`;
+      if      (left <= 0.2) cdFill.style.background = 'var(--error)';
+      else if (left <= 0.4) cdFill.style.background = 'var(--warning)';
+      else                  cdFill.style.background = 'var(--accent)';
+    }
+
+    // Timer ring — also changes color for tension
+    if (arc) {
+      arc.style.strokeDashoffset = String(circumference * pct);
+      if      (left <= 0.2) arc.style.stroke = 'var(--error)';
+      else if (left <= 0.4) arc.style.stroke = 'var(--warning)';
+      else                  arc.style.stroke = 'var(--accent)';
+    }
+
     const remaining = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
     const m = Math.floor(remaining / 60);
     const s = remaining % 60;
@@ -445,7 +482,8 @@ function startAudio(url) {
     if (playIcon) playIcon.textContent = '▶';
     progressFill.style.width = '100%';
     timerDisplay.textContent = '0:00';
-    if (arc) arc.style.strokeDashoffset = String(circumference);
+    if (arc)    { arc.style.strokeDashoffset = String(circumference); arc.style.stroke = 'var(--error)'; }
+    if (cdFill) { cdFill.style.width = '0%'; cdFill.style.background = 'var(--error)'; }
   };
 
   playBtn.onclick = () => {
@@ -817,6 +855,34 @@ function genreStats(songs) {
   return { total: songs.length, new: newCount, due, learned, notDue };
 }
 
+const GENRE_GRADIENTS = {
+  'hip-hop':    'linear-gradient(135deg, rgba(220,50,80,0.18), rgba(100,30,120,0.06))',
+  'rap':        'linear-gradient(135deg, rgba(220,50,80,0.18), rgba(100,30,120,0.06))',
+  'r&b':        'linear-gradient(135deg, rgba(110,50,220,0.17), rgba(180,40,110,0.06))',
+  'soul':       'linear-gradient(135deg, rgba(200,100,60,0.17), rgba(140,60,30,0.06))',
+  'pop':        'linear-gradient(135deg, rgba(220,80,190,0.16), rgba(90,50,200,0.06))',
+  'rock':       'linear-gradient(135deg, rgba(200,90,30,0.17), rgba(120,50,20,0.06))',
+  'electronic': 'linear-gradient(135deg, rgba(30,180,220,0.17), rgba(20,80,200,0.06))',
+  'dance':      'linear-gradient(135deg, rgba(30,180,220,0.17), rgba(20,80,200,0.06))',
+  'country':    'linear-gradient(135deg, rgba(200,155,50,0.17), rgba(120,80,30,0.06))',
+  'alternative':'linear-gradient(135deg, rgba(80,130,210,0.17), rgba(40,80,160,0.06))',
+  'indie':      'linear-gradient(135deg, rgba(60,200,140,0.16), rgba(40,140,100,0.06))',
+  'metal':      'linear-gradient(135deg, rgba(100,80,80,0.20), rgba(50,40,40,0.06))',
+  'jazz':       'linear-gradient(135deg, rgba(220,185,55,0.17), rgba(160,100,30,0.06))',
+  'classical':  'linear-gradient(135deg, rgba(220,205,165,0.14), rgba(160,140,100,0.06))',
+  'reggae':     'linear-gradient(135deg, rgba(60,180,80,0.17), rgba(200,160,30,0.06))',
+  'latin':      'linear-gradient(135deg, rgba(220,120,40,0.17), rgba(200,60,60,0.06))',
+  'blues':      'linear-gradient(135deg, rgba(60,100,200,0.17), rgba(40,60,140,0.06))',
+};
+
+function getGenreGradient(genre) {
+  const g = genre.toLowerCase();
+  for (const [key, grad] of Object.entries(GENRE_GRADIENTS)) {
+    if (g.includes(key)) return grad;
+  }
+  return null;
+}
+
 function renderGenreGrid() {
   const grid = document.getElementById('genre-grid');
   if (!grid) return;
@@ -904,7 +970,10 @@ function renderGenreGrid() {
           </div>
         </div>` : '';
 
-      return `<div class="genre-card${isExpanded ? ' expanded' : ''} ${accentClass}" data-genre="${esc(g)}">
+      const gradient = getGenreGradient(g);
+      const gradStyle = gradient ? ` style="--genre-gradient:${gradient}"` : '';
+
+      return `<div class="genre-card${isExpanded ? ' expanded' : ''} ${accentClass}" data-genre="${esc(g)}"${gradStyle}>
         <div class="genre-card-main">
           <div class="genre-card-text">
             <span class="genre-card-name">${esc(label)}</span>
@@ -1032,10 +1101,12 @@ function renderQuestion() {
   const artThumb = document.getElementById('quiz-art-thumb');
   if (artBg && q.song.artwork) {
     artBg.style.backgroundImage = `url(${q.song.artwork})`;
+    artBg.classList.remove('revealed');
   }
   if (artThumb) {
     artThumb.src = q.song.artwork || '';
     artThumb.style.display = q.song.artwork ? 'block' : 'none';
+    artThumb.classList.remove('revealed');
   }
 
   document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
@@ -1156,6 +1227,12 @@ function handleAnswer() {
       }
     }
   }
+
+  // Reveal album art
+  const artThumb = document.getElementById('quiz-art-thumb');
+  if (artThumb) artThumb.classList.add('revealed');
+  const artBgEl = document.getElementById('quiz-art-bg');
+  if (artBgEl) artBgEl.classList.add('revealed');
 
   document.getElementById('submit-answer-btn').style.display = 'none';
   document.getElementById('next-btn').style.display = 'block';
@@ -1350,7 +1427,7 @@ async function renderStats() {
     const pct   = Math.round((known / total) * 100);
     return `<div class="knowledge-bar-row">
       <span class="knowledge-bar-label">${t.charAt(0).toUpperCase() + t.slice(1)}</span>
-      <div class="knowledge-bar-track"><div class="knowledge-bar-fill" style="width:${pct}%"></div></div>
+      <div class="knowledge-bar-track"><div class="knowledge-bar-fill knowledge-bar-fill--${t}" style="width:${pct}%"></div></div>
       <span class="knowledge-bar-pct">${pct}%</span>
       <span class="knowledge-bar-sub">${known} of ${kn.total}</span>
     </div>`;
@@ -1532,7 +1609,7 @@ function esc(str) {
 function updateStreakDisplay() {
   const el = document.getElementById('quiz-streak');
   if (!el) return;
-  if (state.quizStreak >= 2) {
+  if (state.quizStreak >= 3) {
     el.textContent = `${state.quizStreak}×`;
     el.style.display = 'inline-flex';
     el.classList.remove('streak-bump');
@@ -2005,6 +2082,15 @@ async function init() {
   toastContainer.id = 'toast-container';
   toastContainer.className = 'toast-container';
   document.body.appendChild(toastContainer);
+
+  // ── Countdown bar: inject at top of quiz card ────────────────────────────
+  const quizCard = document.querySelector('.quiz-card');
+  if (quizCard) {
+    const cdBar = document.createElement('div');
+    cdBar.className = 'countdown-bar';
+    cdBar.innerHTML = '<div id="countdown-bar-fill" class="countdown-bar-fill"></div>';
+    quizCard.insertBefore(cdBar, quizCard.firstChild);
+  }
 
   // ── Quiz art section: wrap canvas + inject bg + thumb ────────────────────
   const visualizerEl = document.getElementById('visualizer');
