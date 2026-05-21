@@ -708,10 +708,10 @@ async function backfillGenres() {
 }
 
 async function refreshPreviews() {
-  const todo = state.library.filter(s => s.previewCountry !== 'de');
+  const todo = state.library.filter(s => s.previewCountry === null);
   if (!todo.length) {
     const statusEl = document.getElementById('refresh-previews-status');
-    if (statusEl) statusEl.textContent = 'All songs already on DE storefront.';
+    if (statusEl) statusEl.textContent = 'All songs already checked.';
     return;
   }
 
@@ -728,21 +728,43 @@ async function refreshPreviews() {
     if (statusEl) statusEl.textContent = `${i + 1} / ${todo.length}…`;
 
     try {
-      const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=de`);
-      const data = await res.json();
-      const r    = data.results?.[0];
-      if (r?.previewUrl) {
+      let r = null;
+      let country = null;
+
+      const deRes  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=de`);
+      const deData = await deRes.json();
+      if (deData.results?.[0]?.previewUrl) {
+        r = deData.results[0];
+        country = 'de';
+      } else {
+        // Fallback: US storefront
+        const usRes  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}`);
+        const usData = await usRes.json();
+        if (usData.results?.[0]?.previewUrl) {
+          r = usData.results[0];
+          country = 'us';
+        }
+      }
+
+      if (r) {
         const artwork = (r.artworkUrl100 || '').replace('100x100bb', '300x300bb');
         await fetch(`/api/songs/${song.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ preview_url: r.previewUrl, artwork_url: artwork, preview_country: 'de' }),
+          body: JSON.stringify({ preview_url: r.previewUrl, artwork_url: artwork, preview_country: country }),
         });
         song.previewUrl     = r.previewUrl;
         song.artwork_url    = artwork;
-        song.previewCountry = 'de';
+        song.previewCountry = country;
         updated++;
       } else {
+        // Mark as checked so it's skipped on future runs
+        await fetch(`/api/songs/${song.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preview_country: 'none' }),
+        });
+        song.previewCountry = 'none';
         failed++;
       }
     } catch {
