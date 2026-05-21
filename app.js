@@ -713,11 +713,13 @@ async function refreshPreviews() {
   const btn      = document.getElementById('refresh-previews-btn');
   const statusEl = document.getElementById('refresh-previews-status');
   if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = `0 / ${songs.length}…`;
 
   let updated = 0, failed = 0;
 
   for (let i = 0; i < songs.length; i++) {
     const song = songs[i];
+
     if (statusEl) statusEl.textContent = `${i + 1} / ${songs.length}…`;
 
     try {
@@ -747,9 +749,8 @@ async function refreshPreviews() {
     }
   }
 
-  if (statusEl) statusEl.textContent = `Done — ${updated} updated${failed ? `, ${failed} not found` : ''}.`;
   if (btn) btn.disabled = false;
-  showToast(`Previews refreshed: ${updated} updated.`);
+  if (statusEl) statusEl.textContent = `Done — ${updated} updated${failed ? `, ${failed} not found` : ''}.`;
 }
 
 function genreStats(songs) {
