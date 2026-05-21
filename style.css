@@ -9,8 +9,8 @@
   --surface:      #111111;
   --surface-2:    #161616;
   --surface-3:    #1e1e1e;
-  --accent:       #c8965a;
-  --accent-hover: #b88048;
+  --accent:       #6e8ef0;
+  --accent-hover: #5a7ae0;
   --success:      #52c48a;
   --warning:      #c8a84a;
   --error:        #d45555;
@@ -499,9 +499,9 @@ body {
 .mastery-pill-field   { background: rgba(255,255,255,0.04); color: var(--text-3); }
 .mastery-pill-unheard { background: rgba(255,255,255,0.04); color: var(--text-3); }
 .mastery-pill-s0      { background: rgba(255,255,255,0.04); color: var(--text-3); }
-.mastery-pill-s1      { background: rgba(200,150,90,0.10);  color: var(--accent); }
-.mastery-pill-s2      { background: rgba(200,150,90,0.15);  color: var(--accent); }
-.mastery-pill-s3      { background: rgba(200,150,90,0.20);  color: var(--accent); }
+.mastery-pill-s1      { background: rgba(110,142,240,0.10); color: var(--accent); }
+.mastery-pill-s2      { background: rgba(110,142,240,0.15); color: var(--accent); }
+.mastery-pill-s3      { background: rgba(110,142,240,0.20); color: var(--accent); }
 
 /* ── Quiz Setup Header ──────────────────────────────────────────────────────── */
 
@@ -638,8 +638,8 @@ body {
 .gc-mb-seg { height: 100%; }
 .gc-mb-unheard { background: rgba(255,255,255,0.08); }
 .gc-mb-s0      { background: rgba(255,255,255,0.08); }
-.gc-mb-s1      { background: rgba(200,150,90,0.35); }
-.gc-mb-s2      { background: rgba(200,150,90,0.65); }
+.gc-mb-s1      { background: rgba(110,142,240,0.30); }
+.gc-mb-s2      { background: rgba(110,142,240,0.60); }
 .gc-mb-s3      { background: var(--accent); }
 
 /* Practice button — hover only */

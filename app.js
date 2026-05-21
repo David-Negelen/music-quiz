@@ -527,7 +527,7 @@ function renderSearchResults(songs) {
           <div class="song-card-sub">${esc(song.artist)} · ${song.year}</div>
         </div>
         <button class="add-btn ${added ? 'added' : ''}" data-id="${song.id}" data-idx="${songs.indexOf(song)}"
-          title="${added ? 'Added' : 'Add to library'}" ${added ? 'disabled' : ''}>
+          title="${added ? 'Hinzugefügt' : 'Zur Bibliothek'}" ${added ? 'disabled' : ''}>
           ${added ? '' : '<span>+</span>'}
         </button>
       </div>`;
@@ -619,8 +619,8 @@ function renderLibrary() {
             <span class="mastery-dot-field mastery-field-${fm.artist}"></span>
             <span class="mastery-dot-field mastery-field-${fm.year}"></span>
           </span>
-          <button class="history-btn" data-id="${song.id}" title="View history"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg></button>
-          <button class="remove-btn" data-id="${song.id}" title="Remove">×</button>
+          <button class="history-btn" data-id="${song.id}" title="Verlauf anzeigen"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg></button>
+          <button class="remove-btn" data-id="${song.id}" title="Entfernen">×</button>
         </div>`;
     }).join('');
 
@@ -693,10 +693,10 @@ function renderMasteryOverview() {
       <div class="msb-seg msb-notdue"  style="width:${notDuePct}%"></div>
     </div>
     <div class="mastery-seg-legend">
-      <span class="msl-item"><span class="msl-dot" style="background:var(--accent)"></span>${dueToday} due</span>
-      <span class="msl-item"><span class="msl-dot" style="background:var(--warning)"></span>${newSongs} new</span>
-      <span class="msl-item"><span class="msl-dot" style="background:var(--success)"></span>${learned} learned</span>
-      <span class="msl-item"><span class="msl-dot" style="background:var(--text-3)"></span>${notDue} not due</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--accent)"></span>${dueToday} fällig</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--warning)"></span>${newSongs} neu</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--success)"></span>${learned} gelernt</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--text-3)"></span>${notDue} nicht fällig</span>
     </div>`;
 }
 
@@ -749,7 +749,7 @@ async function refreshPreviews() {
   const todo = state.library.filter(s => s.previewCountry === null || s.previewCountry === 'us' || s.previewCountry === 'none');
   if (!todo.length) {
     const statusEl = document.getElementById('refresh-previews-status');
-    if (statusEl) statusEl.textContent = 'All songs already checked.';
+    if (statusEl) statusEl.textContent = 'Alle Songs bereits geprüft.';
     return;
   }
 
@@ -931,15 +931,15 @@ function renderGenreGrid() {
         <div class="genre-card-detail">
           <div class="gc-top-row">
             <div class="gc-stat-row">
-              <div class="gc-stat"><span class="gc-stat-num">${st.total}</span><span class="gc-stat-label">songs</span></div>
-              <div class="gc-stat"><span class="gc-stat-num gc-new">${st.new}</span><span class="gc-stat-label">new</span></div>
-              <div class="gc-stat"><span class="gc-stat-num gc-due">${st.due}</span><span class="gc-stat-label">due</span></div>
-              <div class="gc-stat"><span class="gc-stat-num">${st.notDue}</span><span class="gc-stat-label">not due</span></div>
-              <div class="gc-stat"><span class="gc-stat-num gc-ok">${st.learned}</span><span class="gc-stat-label">learned</span></div>
+              <div class="gc-stat"><span class="gc-stat-num">${st.total}</span><span class="gc-stat-label">Songs</span></div>
+              <div class="gc-stat"><span class="gc-stat-num gc-new">${st.new}</span><span class="gc-stat-label">neu</span></div>
+              <div class="gc-stat"><span class="gc-stat-num gc-due">${st.due}</span><span class="gc-stat-label">fällig</span></div>
+              <div class="gc-stat"><span class="gc-stat-num">${st.notDue}</span><span class="gc-stat-label">nicht fällig</span></div>
+              <div class="gc-stat"><span class="gc-stat-num gc-ok">${st.learned}</span><span class="gc-stat-label">gelernt</span></div>
             </div>
             <div class="gc-mastery-bar-wrap">
               <div class="gc-mastery-bar"><div class="gc-mastery-fill" style="width:${masteryPct}%"></div></div>
-              <span class="gc-mastery-label">${masteryPct}% mastered</span>
+              <span class="gc-mastery-label">${masteryPct}% gemeistert</span>
             </div>
           </div>
           <div class="gc-song-list">
@@ -951,7 +951,7 @@ function renderGenreGrid() {
                   <span class="gc-song-title">${esc(s.title)}</span>
                   <span class="gc-song-artist">${esc(s.artist)}</span>
                 </div>
-                <span class="gc-song-status gc-song-status--${status}">${status === 'not-due' ? 'not due' : status}</span>
+                <span class="gc-song-status gc-song-status--${status}">${status === 'not-due' ? 'nicht fällig' : status === 'due' ? 'fällig' : status === 'new' ? 'neu' : 'gelernt'}</span>
               </div>`;
             }).join('')}
           </div>
@@ -964,7 +964,7 @@ function renderGenreGrid() {
             <div class="genre-card-count">${st.total} songs</div>
             ${miniBar}
           </div>
-          <button class="genre-card-practice-btn btn-primary" data-genre="${esc(g)}">Practice</button>
+          <button class="genre-card-practice-btn btn-primary" data-genre="${esc(g)}">Üben</button>
         </div>
         ${expandedHtml}
       </div>`;
@@ -1013,9 +1013,9 @@ function renderGenreGrid() {
 function updateLibraryStatus() {
   const el = document.getElementById('library-status');
   const n = state.library.length;
-  if (n === 0) el.textContent = 'Add songs to your library first.';
+  if (n === 0) el.textContent = 'Zuerst Songs zur Bibliothek hinzufügen.';
   else if (n < 2) el.textContent = `${n} song in library — add at least one more to start.`;
-  else el.textContent = `${n} songs in library.`;
+  else el.textContent = `${n} Songs in der Bibliothek.`;
   renderMasteryOverview();
   renderGenreGrid();
 }
@@ -1096,7 +1096,7 @@ function renderQuestion() {
   document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
   const progressFillEl = document.getElementById('quiz-progress-fill');
   if (progressFillEl) progressFillEl.style.width = `${((state.quizIndex + 1) / total) * 100}%`;
-  document.getElementById('quiz-score').textContent = `${state.quizScore} pts`;
+  document.getElementById('quiz-score').textContent = `${state.quizScore} Pkt`;
   document.getElementById('next-btn').style.display = 'none';
   const submitBtn = document.getElementById('submit-answer-btn');
   submitBtn.style.display = 'block';
@@ -1185,7 +1185,7 @@ function handleAnswer() {
     recordAnswer(q.song.id, type, correct[type]);
   }
 
-  document.getElementById('quiz-score').textContent = `${state.quizScore} pts`;
+  document.getElementById('quiz-score').textContent = `${state.quizScore} Pkt`;
 
   const answers = { title: q.song.title, artist: q.song.artist, year: q.song.year };
   for (const type of ['title', 'artist', 'year']) {
@@ -1308,7 +1308,7 @@ function showReview() {
   const n = answers.length;
 
   document.getElementById('review-subtitle').textContent =
-    `${n} song${n !== 1 ? 's' : ''} · ${elapsed} min`;
+    `${n} Song${n !== 1 ? 's' : ''} · ${elapsed} Min`;
 
   const totals = { title: 0, artist: 0, year: 0 };
   for (const a of answers) {
@@ -1336,17 +1336,17 @@ function showReview() {
   document.getElementById('review-stat-boxes').innerHTML = `
     <div class="review-stat-box">
       <span class="review-stat-pct">${tPct}%</span>
-      <span class="review-stat-label">Title</span>
+      <span class="review-stat-label">Titel</span>
       <div class="review-stat-bar-track"><div class="review-stat-bar-fill" style="width:${tPct}%"></div></div>
     </div>
     <div class="review-stat-box">
       <span class="review-stat-pct">${aPct}%</span>
-      <span class="review-stat-label">Artist</span>
+      <span class="review-stat-label">Künstler</span>
       <div class="review-stat-bar-track"><div class="review-stat-bar-fill" style="width:${aPct}%"></div></div>
     </div>
     <div class="review-stat-box">
       <span class="review-stat-pct">${yPct}%</span>
-      <span class="review-stat-label">Year</span>
+      <span class="review-stat-label">Jahr</span>
       <div class="review-stat-bar-track"><div class="review-stat-bar-fill" style="width:${yPct}%"></div></div>
     </div>
   `;
@@ -1371,18 +1371,18 @@ function showReview() {
   let html = '';
   if (missed.length) {
     html += `<div class="review-group">
-      <div class="review-group-label">Missed something &middot; ${missed.length}</div>
+      <div class="review-group-label">Nicht alles gewusst &middot; ${missed.length}</div>
       ${missed.map(songRow).join('')}
     </div>`;
   }
   if (allGood.length) {
     html += `<details class="review-group">
-      <summary class="review-group-label">Got all 3 &middot; ${allGood.length}</summary>
+      <summary class="review-group-label">Alles richtig &middot; ${allGood.length}</summary>
       ${allGood.map(songRow).join('')}
     </details>`;
   }
 
-  document.getElementById('review-song-list').innerHTML = html || '<p class="hint" style="padding:12px 14px">No songs this session.</p>';
+  document.getElementById('review-song-list').innerHTML = html || '<p class="hint" style="padding:12px 14px">Keine Songs in dieser Session.</p>';
 }
 
 // ── Stats page ────────────────────────────────────────────────────────────
@@ -1393,15 +1393,15 @@ async function renderStats() {
     const res = await fetch('/api/stats');
     data = await res.json();
   } catch {
-    document.getElementById('stats-overview').innerHTML = '<p class="hint">Could not load stats.</p>';
+    document.getElementById('stats-overview').innerHTML = '<p class="hint">Statistiken konnten nicht geladen werden.</p>';
     return;
   }
 
   document.getElementById('stats-overview').innerHTML = `
     <div class="stat-chip"><span class="stat-num">${data.totalSongs}</span><span class="stat-label">Songs</span></div>
     <div class="stat-chip"><span class="stat-num">${data.sessionsPlayed}</span><span class="stat-label">Sessions</span></div>
-    <div class="stat-chip"><span class="stat-num">${data.uniqueReviewed}</span><span class="stat-label">Reviewed</span></div>
-    <div class="stat-chip"><span class="stat-num">${data.avgSessionSize}</span><span class="stat-label">Avg size</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.uniqueReviewed}</span><span class="stat-label">Gelernt</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.avgSessionSize}</span><span class="stat-label">Ø Größe</span></div>
   `;
 
   const kn = data.knowledge;
@@ -1410,7 +1410,7 @@ async function renderStats() {
     const known = kn[t] || 0;
     const pct   = Math.round((known / total) * 100);
     return `<div class="knowledge-bar-row">
-      <span class="knowledge-bar-label">${t.charAt(0).toUpperCase() + t.slice(1)}</span>
+      <span class="knowledge-bar-label">${{title:'Titel',artist:'Künstler',year:'Jahr'}[t]}</span>
       <div class="knowledge-bar-track"><div class="knowledge-bar-fill knowledge-bar-fill--${t}" style="width:${pct}%"></div></div>
       <span class="knowledge-bar-pct">${pct}%</span>
       <span class="knowledge-bar-sub">${known} of ${kn.total}</span>
@@ -1443,13 +1443,13 @@ async function renderStats() {
       </div>`;
     }).join('');
   } else {
-    document.getElementById('stats-hardest').innerHTML = '<p class="hint" style="padding:8px 0">No data yet — play some sessions first.</p>';
+    document.getElementById('stats-hardest').innerHTML = '<p class="hint" style="padding:8px 0">Noch keine Daten — spiel erst ein paar Sessions.</p>';
   }
 
   document.getElementById('stats-streak').innerHTML = `
     <div class="streak-display">
       <span class="streak-num">${data.bestStreak}</span>
-      <span class="streak-label">day${data.bestStreak !== 1 ? 's' : ''} best streak</span>
+      <span class="streak-label">Tag${data.bestStreak !== 1 ? 'e' : ''} beste Serie</span>
     </div>`;
 
   setTimeout(() => drawSessionsChart(data.recentSessions), 0);
@@ -1512,7 +1512,7 @@ async function loadSessionHistory(append) {
     if (!append) container.innerHTML = '';
 
     if (!rows.length && !append) {
-      container.innerHTML = '<p class="hint" style="padding:8px 0">No sessions yet.</p>';
+      container.innerHTML = '<p class="hint" style="padding:8px 0">Noch keine Sessions.</p>';
       loadMoreBtn.style.display = 'none';
       return;
     }
@@ -1534,7 +1534,7 @@ async function loadSessionHistory(append) {
       el.innerHTML = `
         <div class="history-session-header">
           <span class="history-date">${dateStr}</span>
-          <span class="history-summary">${n} songs &nbsp;·&nbsp; T ${tPct}% &nbsp;A ${aPct}% &nbsp;Y ${yPct}%</span>
+          <span class="history-summary">${n} Songs &nbsp;·&nbsp; T ${tPct}% &nbsp;K ${aPct}% &nbsp;J ${yPct}%</span>
         </div>
         <div class="history-session-detail" style="display:none"></div>`;
       el.querySelector('.history-session-header').addEventListener('click', () => toggleHistorySession(el));
@@ -1544,7 +1544,7 @@ async function loadSessionHistory(append) {
     state.historyOffset += rows.length;
     loadMoreBtn.style.display = state.historyOffset < total ? 'block' : 'none';
   } catch {
-    if (!append) container.innerHTML = '<p class="hint">Could not load history.</p>';
+    if (!append) container.innerHTML = '<p class="hint">Verlauf konnte nicht geladen werden.</p>';
   }
 }
 
@@ -1556,7 +1556,7 @@ async function toggleHistorySession(el) {
   detail.style.display = 'block';
   if (detail.dataset.loaded) return;
   detail.dataset.loaded = '1';
-  detail.innerHTML = '<p class="hint" style="padding:8px 14px">Loading…</p>';
+  detail.innerHTML = '<p class="hint" style="padding:8px 14px">Lädt…</p>';
 
   try {
     const res     = await fetch(`/api/sessions/${el.dataset.id}/results`);
@@ -1678,7 +1678,7 @@ async function runAllTimeImport() {
   document.getElementById('import-result').style.display = 'none';
   runBtn.disabled = cancelBtn.disabled = true;
   progressFill.style.width = '0%';
-  statusEl.textContent = 'Fetching Last.fm chart…';
+  statusEl.textContent = 'Last.fm-Chart wird geladen…';
 
   let apiKey;
   try {
@@ -1698,7 +1698,7 @@ async function runAllTimeImport() {
   try {
     entries = await fetchLastFmTracks(tag, limit, apiKey);
   } catch (e) {
-    statusEl.textContent = `Failed: ${e.message}`;
+    statusEl.textContent = `Fehler: ${e.message}`;
     runBtn.disabled = cancelBtn.disabled = false;
     return;
   }
@@ -1824,7 +1824,7 @@ async function runBulkImport(entries) {
     }
   }
 
-  statusEl.textContent = 'Done.';
+  statusEl.textContent = 'Fertig.';
   resultEl.style.display = 'block';
 
   let msg = `Added ${added} song${added !== 1 ? 's' : ''}`;
@@ -1911,7 +1911,7 @@ function renderSongHistoryBody(history) {
   // Table
   const pill = got => `<span class="result-pill ${got ? 'pill-correct' : 'pill-wrong'}">${got ? '✓' : '✗'}</span>`;
   let table = `<table class="shm-table">
-    <thead><tr><th>Date</th><th>Title</th><th>Artist</th><th>Year</th></tr></thead><tbody>`;
+    <thead><tr><th>Datum</th><th>Titel</th><th>Künstler</th><th>Jahr</th></tr></thead><tbody>`;
   for (const h of history) {
     table += `<tr>
       <td class="shm-date">${formatHistoryDate(h.answered_at)}</td>
@@ -2000,7 +2000,7 @@ async function startSession() {
   const setupError = document.getElementById('setup-error');
 
   if (state.library.length < 2) {
-    setupError.textContent = 'Add at least 2 songs to your library first.';
+    setupError.textContent = 'Zuerst mindestens 2 Songs zur Bibliothek hinzufügen.';
     setupError.style.display = 'block';
     return;
   }
@@ -2014,8 +2014,8 @@ async function startSession() {
   
   if (!state.quizQuestions) {
     setupError.textContent = genres
-      ? 'No songs match the selected genres.'
-      : 'No songs in queue. Your library may be too small.';
+      ? 'Keine Songs für die ausgewählten Genres.'
+      : 'Keine Songs in der Warteschlange. Bibliothek zu klein?';
     setupError.style.display = 'block';
     return;
   }

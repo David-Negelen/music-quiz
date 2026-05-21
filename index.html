@@ -11,8 +11,8 @@
     <header class="app-header">
       <div class="app-title">Musik Quiz</div>
       <nav class="app-nav">
-        <button class="nav-btn active" data-view="library">Library</button>
-        <button class="nav-btn" data-view="stats">Stats</button>
+        <button class="nav-btn active" data-view="library">Bibliothek</button>
+        <button class="nav-btn" data-view="stats">Statistiken</button>
         <button class="nav-btn" data-view="quiz-setup">Quiz</button>
       </nav>
     </header>
@@ -21,35 +21,35 @@
     <section id="view-library" class="view active">
       <div class="search-section">
         <div class="search-bar">
-          <input type="text" id="search-input" placeholder="Search songs or artists…" autocomplete="off" spellcheck="false" />
-          <button id="search-btn" class="btn-primary">Search</button>
+          <input type="text" id="search-input" placeholder="Songs oder Künstler suchen…" autocomplete="off" spellcheck="false" />
+          <button id="search-btn" class="btn-primary">Suchen</button>
         </div>
-        <div id="search-loading" class="loading-msg" style="display:none">Searching…</div>
+        <div id="search-loading" class="loading-msg" style="display:none">Suche läuft…</div>
         <div id="search-error" class="error-msg" style="display:none"></div>
         <div id="search-results" class="song-grid"></div>
       </div>
 
       <div class="library-section">
         <div class="library-header">
-          <h2>My Library <span id="library-count" class="badge">0</span></h2>
+          <h2>Meine Bibliothek <span id="library-count" class="badge">0</span></h2>
           <div class="library-actions">
             <select id="library-sort" class="library-sort-select">
-              <option value="title">Title A–Z</option>
-              <option value="artist">Artist A–Z</option>
-              <option value="year">Year</option>
-              <option value="knowledge">Weakest first</option>
-              <option value="added">Date added</option>
+              <option value="title">Titel A–Z</option>
+              <option value="artist">Künstler A–Z</option>
+              <option value="year">Jahr</option>
+              <option value="knowledge">Schwächste zuerst</option>
+              <option value="added">Hinzugefügt</option>
             </select>
-            <button id="refresh-previews-btn" class="btn-ghost btn-sm">Refresh previews</button>
+            <button id="refresh-previews-btn" class="btn-ghost btn-sm">Vorschauen aktualisieren</button>
             <span id="refresh-previews-status" class="genre-backfill-status"></span>
-            <button id="import-btn" class="btn-ghost btn-sm">Import playlist</button>
+            <button id="import-btn" class="btn-ghost btn-sm">Playlist importieren</button>
           </div>
         </div>
         <div id="library-songs" class="song-list"></div>
         <div id="library-empty" class="empty-state">
           <div class="empty-icon">♫</div>
-          <p>Search for songs above and add them to your library.</p>
-          <p class="hint">You need at least 4 songs to start a quiz.</p>
+          <p>Suche nach Songs und füge sie deiner Bibliothek hinzu.</p>
+          <p class="hint">Du brauchst mindestens 4 Songs, um ein Quiz zu starten.</p>
         </div>
       </div>
     </section>
@@ -63,7 +63,7 @@
         </div>
         <div class="quiz-setup-header-right">
           <div id="setup-error" class="error-msg" style="display:none"></div>
-          <button id="start-quiz-btn" class="btn-primary btn-lg">Practice All</button>
+          <button id="start-quiz-btn" class="btn-primary btn-lg">Alles üben</button>
         </div>
       </div>
       <div class="genre-grid" id="genre-grid"></div>
@@ -82,14 +82,14 @@
         </div>
         <span id="quiz-score" class="quiz-score-display">0 pts</span>
         <span id="quiz-streak" class="quiz-streak-badge" style="display:none"></span>
-        <button id="end-session-btn" class="btn-ghost btn-sm end-session-btn" title="End session">End</button>
+        <button id="end-session-btn" class="btn-ghost btn-sm end-session-btn" title="Session beenden">Ende</button>
       </div>
 
       <div class="quiz-card">
         <canvas id="visualizer" class="visualizer"></canvas>
 
         <div class="player-row">
-          <button id="play-btn" class="play-btn" title="Play / Pause">
+          <button id="play-btn" class="play-btn" title="Abspielen / Pause">
             <span id="play-icon">▶</span>
           </button>
           <div class="progress-track" id="progress-track">
@@ -101,27 +101,27 @@
 
         <div class="answer-fields">
           <div class="answer-field-row">
-            <span class="field-label">Title</span>
+            <span class="field-label">Titel</span>
             <div class="answer-wrap">
-              <input type="text" id="answer-title" class="answer-input" placeholder="Song title…" autocomplete="off" spellcheck="false">
+              <input type="text" id="answer-title" class="answer-input" placeholder="Songtitel…" autocomplete="off" spellcheck="false">
               <ul id="dropdown-title" class="answer-dropdown" style="display:none"></ul>
               <div class="field-hint" id="hint-title"></div>
             </div>
             <span class="field-result" id="result-title"></span>
           </div>
           <div class="answer-field-row">
-            <span class="field-label">Artist</span>
+            <span class="field-label">Künstler</span>
             <div class="answer-wrap">
-              <input type="text" id="answer-artist" class="answer-input" placeholder="Artist name…" autocomplete="off" spellcheck="false">
+              <input type="text" id="answer-artist" class="answer-input" placeholder="Künstlername…" autocomplete="off" spellcheck="false">
               <ul id="dropdown-artist" class="answer-dropdown" style="display:none"></ul>
               <div class="field-hint" id="hint-artist"></div>
             </div>
             <span class="field-result" id="result-artist"></span>
           </div>
           <div class="answer-field-row">
-            <span class="field-label">Year</span>
+            <span class="field-label">Jahr</span>
             <div class="answer-wrap">
-              <input type="text" id="answer-year" class="answer-input" placeholder="Year…" autocomplete="off" spellcheck="false">
+              <input type="text" id="answer-year" class="answer-input" placeholder="Jahr…" autocomplete="off" spellcheck="false">
               <ul id="dropdown-year" class="answer-dropdown" style="display:none"></ul>
               <div class="field-hint" id="hint-year"></div>
             </div>
@@ -130,8 +130,8 @@
         </div>
 
         <div class="quiz-card-footer">
-          <button id="submit-answer-btn" class="btn-primary btn-lg">Check</button>
-          <button id="next-btn" class="btn-primary btn-lg next-btn" style="display:none">Next →</button>
+          <button id="submit-answer-btn" class="btn-primary btn-lg">Prüfen</button>
+          <button id="next-btn" class="btn-primary btn-lg next-btn" style="display:none">Weiter →</button>
         </div>
       </div>
     </section>
@@ -140,13 +140,13 @@
     <section id="view-results" class="view">
       <div class="review-card">
         <div class="review-header">
-          <h2>Session complete</h2>
+          <h2>Session abgeschlossen</h2>
           <p id="review-subtitle" class="review-subtitle"></p>
         </div>
         <div id="review-stat-boxes" class="review-stat-boxes"></div>
         <div id="review-song-list" class="review-song-list"></div>
         <div class="review-footer">
-          <button id="back-quiz-btn" class="btn-primary btn-lg">Back to Quiz</button>
+          <button id="back-quiz-btn" class="btn-primary btn-lg">Zurück zum Quiz</button>
         </div>
       </div>
     </section>
@@ -156,22 +156,22 @@
       <div class="stats-page">
         <div id="stats-overview" class="stats-overview-row"></div>
         <div class="stats-section">
-          <h3 class="stats-section-title">Knowledge</h3>
+          <h3 class="stats-section-title">Wissen</h3>
           <div id="stats-knowledge"></div>
         </div>
         <div class="stats-section">
-          <h3 class="stats-section-title">Hardest songs</h3>
+          <h3 class="stats-section-title">Schwierigste Songs</h3>
           <div id="stats-hardest"></div>
         </div>
         <div class="stats-section stats-section--activity">
-          <h3 class="stats-section-title">Activity</h3>
+          <h3 class="stats-section-title">Aktivität</h3>
           <div id="stats-streak" class="stats-streak"></div>
           <canvas id="stats-chart" class="stats-chart"></canvas>
         </div>
         <div class="stats-section">
-          <h3 class="stats-section-title">Past sessions</h3>
+          <h3 class="stats-section-title">Vergangene Sessions</h3>
           <div id="stats-history"></div>
-          <button id="stats-load-more" class="btn-ghost btn-sm stats-load-more" style="display:none">Load more</button>
+          <button id="stats-load-more" class="btn-ghost btn-sm stats-load-more" style="display:none">Mehr laden</button>
         </div>
       </div>
     </section>
@@ -181,19 +181,19 @@
   <div id="import-modal" class="modal-overlay" style="display:none" aria-modal="true" role="dialog">
     <div class="modal">
       <div class="modal-header">
-        <h3>Import Playlist</h3>
+        <h3>Playlist importieren</h3>
         <button id="modal-close" class="modal-close" aria-label="Close">×</button>
       </div>
 
       <div class="import-tabs">
-        <button class="import-tab active" data-tab="paste">Paste list</button>
-        <button class="import-tab" data-tab="file">Apple Music file</button>
-        <button class="import-tab" data-tab="charts">All Time</button>
+        <button class="import-tab active" data-tab="paste">Liste einfügen</button>
+        <button class="import-tab" data-tab="file">Apple Music Datei</button>
+        <button class="import-tab" data-tab="charts">Gesamt</button>
       </div>
 
       <!-- Paste tab -->
       <div id="import-tab-paste" class="import-tab-content active">
-        <p class="import-hint">One song per line. Formats accepted:</p>
+        <p class="import-hint">Ein Song pro Zeile. Akzeptierte Formate:</p>
         <ul class="import-formats">
           <li><code>Artist - Title</code></li>
           <li><code>Title</code> (just the song name)</li>
@@ -203,21 +203,21 @@
 
       <!-- File tab -->
       <div id="import-tab-file" class="import-tab-content">
-        <p class="import-hint">Export your playlist from the Music app:</p>
+        <p class="import-hint">Playlist aus der Music-App exportieren:</p>
         <ol class="import-formats">
-          <li>Select the playlist in Music.app</li>
-          <li>File → Export Playlist…</li>
-          <li>Save as <strong>.txt</strong> (tab-separated), then upload below</li>
+          <li>Playlist in Music.app auswählen</li>
+          <li>Ablage → Playlist exportieren…</li>
+          <li>Als <strong>.txt</strong> speichern, dann hier hochladen</li>
         </ol>
         <label class="file-drop" id="file-drop">
           <input type="file" id="file-input" accept=".txt,.tsv,.csv" style="display:none">
-          <span id="file-label">Choose file or drag &amp; drop</span>
+          <span id="file-label">Datei auswählen oder ablegen</span>
         </label>
       </div>
 
       <!-- All Time tab -->
       <div id="import-tab-charts" class="import-tab-content">
-        <p class="import-hint">Import all-time greatest songs by genre, ranked by total plays on Last.fm.</p>
+        <p class="import-hint">Beste Songs aller Zeiten nach Genre, sortiert nach Plays auf Last.fm.</p>
         <div class="chart-options">
           <div class="chart-option-row">
             <label class="setting-label" for="chart-genre">Genre</label>
@@ -256,8 +256,8 @@
       <div id="import-result" class="import-result" style="display:none"></div>
 
       <div class="modal-footer">
-        <button id="import-cancel-btn" class="btn-ghost">Cancel</button>
-        <button id="import-run-btn" class="btn-primary">Import</button>
+        <button id="import-cancel-btn" class="btn-ghost">Abbrechen</button>
+        <button id="import-run-btn" class="btn-primary">Importieren</button>
       </div>
     </div>
   </div>
