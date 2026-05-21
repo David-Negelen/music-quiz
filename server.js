@@ -628,6 +628,21 @@ async function handleApi(req, res) {
     return json(res, 200, { lastfmKey: process.env.LASTFM_API_KEY || '' });
   }
 
+  // TEMPORARY: one-time DB restore endpoint — remove after use
+  if (resource === 'restore-db' && method === 'POST') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      try {
+        fs.writeFileSync(dbPath, Buffer.concat(chunks));
+        json(res, 200, { ok: true });
+      } catch (e) {
+        json(res, 500, { error: e.message });
+      }
+    });
+    return;
+  }
+
   if (resource === 'stats' && !id && method === 'GET') {
     const stats = handleGetStats(res);
     // Note: handleGetStats calls json directly, so we return early
