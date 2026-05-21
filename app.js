@@ -186,8 +186,9 @@ async function loadLibrary() {
       artist:     r.artist,
       year:       r.year != null ? String(r.year) : '????',
       artwork:    r.artwork_url || '',
-      previewUrl: r.preview_url || '',
-      genre:      r.genre || '',
+      previewUrl:      r.preview_url || '',
+      previewCountry:  r.preview_country || null,
+      genre:           r.genre || '',
       // Per-field SR for title
       srInterval_title: r.sr_interval_title || 0,
       srEase_title:     r.sr_ease_title     || 2.5,
@@ -707,20 +708,24 @@ async function backfillGenres() {
 }
 
 async function refreshPreviews() {
-  const songs = state.library;
-  if (!songs.length) return;
+  const todo = state.library.filter(s => s.previewCountry !== 'de');
+  if (!todo.length) {
+    const statusEl = document.getElementById('refresh-previews-status');
+    if (statusEl) statusEl.textContent = 'All songs already on DE storefront.';
+    return;
+  }
 
   const btn      = document.getElementById('refresh-previews-btn');
   const statusEl = document.getElementById('refresh-previews-status');
   if (btn) btn.disabled = true;
-  if (statusEl) statusEl.textContent = `0 / ${songs.length}…`;
+  if (statusEl) statusEl.textContent = `0 / ${todo.length}…`;
 
   let updated = 0, failed = 0;
 
-  for (let i = 0; i < songs.length; i++) {
-    const song = songs[i];
+  for (let i = 0; i < todo.length; i++) {
+    const song = todo[i];
 
-    if (statusEl) statusEl.textContent = `${i + 1} / ${songs.length}…`;
+    if (statusEl) statusEl.textContent = `${i + 1} / ${todo.length}…`;
 
     try {
       const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=de`);
@@ -731,10 +736,11 @@ async function refreshPreviews() {
         await fetch(`/api/songs/${song.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ preview_url: r.previewUrl, artwork_url: artwork }),
+          body: JSON.stringify({ preview_url: r.previewUrl, artwork_url: artwork, preview_country: 'de' }),
         });
-        song.previewUrl  = r.previewUrl;
-        song.artwork_url = artwork;
+        song.previewUrl     = r.previewUrl;
+        song.artwork_url    = artwork;
+        song.previewCountry = 'de';
         updated++;
       } else {
         failed++;
@@ -743,7 +749,7 @@ async function refreshPreviews() {
       failed++;
     }
 
-    if (i < songs.length - 1) {
+    if (i < todo.length - 1) {
       const delay = (i + 1) % 20 === 0 ? 2000 : 150;
       await new Promise(r => setTimeout(r, delay));
     }

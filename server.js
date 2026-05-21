@@ -94,6 +94,9 @@ for (const [col, def] of perFieldSRCols) {
 // Migrate: add genre column
 try { db.prepare('ALTER TABLE songs ADD COLUMN genre TEXT DEFAULT NULL').run(); } catch {}
 
+// Migrate: track which storefront the preview was fetched from
+try { db.prepare('ALTER TABLE songs ADD COLUMN preview_country TEXT DEFAULT NULL').run(); } catch {}
+
 // Migrate data from old columns to per-field columns if old columns have data
 try {
   const rows = db.prepare('SELECT id, sr_interval, sr_ease, sr_due, sr_reviews FROM songs WHERE sr_interval > 0 OR sr_ease != 2.5 OR sr_due IS NOT NULL OR sr_reviews > 0').all();
@@ -188,7 +191,7 @@ try {
 const SCORE_FIELDS = new Set([
   'score_title',   'score_artist',   'score_year',
   'attempts_title','attempts_artist','attempts_year',
-  'genre', 'preview_url', 'artwork_url',
+  'genre', 'preview_url', 'artwork_url', 'preview_country',
 ]);
 
 const SR_FIELDS = new Set([
