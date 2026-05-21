@@ -533,56 +533,9 @@ function handleGetQueue(req, res) {
     const allowed = new Set(genresParam.split(','));
     songs = songs.filter(s => allowed.has(s.genre || '__unknown__'));
   }
-  const today = new Date().toISOString().split('T')[0];
-
-  console.log(`Queue request: countParam=${countParam}, count=${count}, songs_returned=${songs.length}`);
-  
-  // Edge case: fewer than 10 songs
-  if (songs.length < 10) {
-    console.log(`Edge case: < 10 songs (${songs.length})`);
-    const shuffled = [...songs].sort(() => Math.random() - 0.5);
-    console.log(`After shuffle: ${shuffled.length} songs`);
-    const result = count > 0 ? shuffled.slice(0, count) : shuffled;
-    console.log(`Returning: ${result.length} songs`);
-    return json(res, 200, {
-      queue: result,
-      note: 'Add more songs for smart scheduling.'
-    });
-  }
-
-  // Score and sort songs
-  const scored = songs.map(song => ({
-    ...song,
-    _score: queueScore(song)
-  }));
-
-  scored.sort((a, b) => a._score - b._score);
-
-  // Check if all songs are not yet due
-  const anyDue = scored.some(s => {
-    const fields = ['title', 'artist', 'year'];
-    return fields.some(f => {
-      const due = s[`sr_due_${f}`];
-      return due !== null && due <= today;
-    });
-  });
-
-  let queue = scored.map(s => {
-    const { _score, ...rest } = s;
-    return rest;
-  });
-
-  if (!anyDue && scored.length > 0) {
-    // All caught up - return all songs
-    return json(res, 200, {
-      queue,
-      note: 'All caught up — reviewing early.'
-    });
-  }
-
-  if (count > 0) {
-    queue = queue.slice(0, count);
-  }
+  // Shuffle randomly
+  const shuffled = [...songs].sort(() => Math.random() - 0.5);
+  const queue = count > 0 ? shuffled.slice(0, count) : shuffled;
 
   return json(res, 200, { queue });
 }
