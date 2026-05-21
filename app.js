@@ -748,23 +748,27 @@ async function refreshPreviews() {
 
       if (r) {
         const artwork = (r.artworkUrl100 || '').replace('100x100bb', '300x300bb');
-        await fetch(`/api/songs/${song.id}`, {
+        const patchRes = await fetch(`/api/songs/${song.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ preview_url: r.previewUrl, artwork_url: artwork, preview_country: country }),
         });
-        song.previewUrl     = r.previewUrl;
-        song.artwork_url    = artwork;
-        song.previewCountry = country;
-        updated++;
+        if (patchRes.ok) {
+          song.previewUrl     = r.previewUrl;
+          song.artwork_url    = artwork;
+          song.previewCountry = country;
+          updated++;
+        } else {
+          failed++;
+        }
       } else {
         // Mark as checked so it's skipped on future runs
-        await fetch(`/api/songs/${song.id}`, {
+        const patchRes = await fetch(`/api/songs/${song.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ preview_country: 'none' }),
         });
-        song.previewCountry = 'none';
+        if (patchRes.ok) song.previewCountry = 'none';
         failed++;
       }
     } catch {
