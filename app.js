@@ -732,6 +732,7 @@ async function refreshPreviews() {
       let r = null;
       let country = null;
 
+      // 1. Try lookup by original ID on European storefronts
       for (const c of FALLBACK_COUNTRIES) {
         const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=${c}`);
         const data = await res.json();
@@ -740,6 +741,26 @@ async function refreshPreviews() {
           country = c;
           break;
         }
+      }
+
+      // 2. ID not in any European catalog — search by artist+title on DE
+      if (!r && song.title && song.artist) {
+        const q   = encodeURIComponent(`${song.artist} ${song.title}`);
+        const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=10&country=de`);
+        const data = await res.json();
+        if (data.results?.length) {
+          const explicit = data.results.find(t => t.previewUrl && t.trackExplicitness === 'explicit');
+          const any      = data.results.find(t => t.previewUrl);
+          const best = explicit || any;
+          if (best) { r = best; country = 'de'; }
+        }
+      }
+
+      // 3. Last resort: US lookup by original ID
+      if (!r) {
+        const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=us`);
+        const data = await res.json();
+        if (data.results?.[0]?.previewUrl) { r = data.results[0]; country = 'us'; }
       }
 
       if (r) {
