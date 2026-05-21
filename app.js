@@ -708,7 +708,7 @@ async function backfillGenres() {
 }
 
 async function refreshPreviews() {
-  const todo = state.library.filter(s => s.previewCountry === null || s.previewCountry === 'us');
+  const todo = state.library.filter(s => s.previewCountry === null || s.previewCountry === 'us' || s.previewCountry === 'none');
   if (!todo.length) {
     const statusEl = document.getElementById('refresh-previews-status');
     if (statusEl) statusEl.textContent = 'All songs already checked.';
@@ -721,6 +721,7 @@ async function refreshPreviews() {
   if (statusEl) statusEl.textContent = `0 / ${todo.length}…`;
 
   let updated = 0, failed = 0;
+  const FALLBACK_COUNTRIES = ['de', 'nl', 'se', 'fr'];
 
   for (let i = 0; i < todo.length; i++) {
     const song = todo[i];
@@ -731,18 +732,13 @@ async function refreshPreviews() {
       let r = null;
       let country = null;
 
-      const deRes  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=de`);
-      const deData = await deRes.json();
-      if (deData.results?.[0]?.previewUrl) {
-        r = deData.results[0];
-        country = 'de';
-      } else {
-        // Fallback: Netherlands (non-censoring)
-        const nlRes  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=nl`);
-        const nlData = await nlRes.json();
-        if (nlData.results?.[0]?.previewUrl) {
-          r = nlData.results[0];
-          country = 'nl';
+      for (const c of FALLBACK_COUNTRIES) {
+        const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=${c}`);
+        const data = await res.json();
+        if (data.results?.[0]?.previewUrl) {
+          r = data.results[0];
+          country = c;
+          break;
         }
       }
 
