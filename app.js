@@ -708,7 +708,7 @@ async function backfillGenres() {
 }
 
 async function refreshPreviews() {
-  const todo = state.library.filter(s => s.previewCountry === null);
+  const todo = state.library.filter(s => s.previewCountry === null || s.previewCountry === 'us');
   if (!todo.length) {
     const statusEl = document.getElementById('refresh-previews-status');
     if (statusEl) statusEl.textContent = 'All songs already checked.';
@@ -737,12 +737,12 @@ async function refreshPreviews() {
         r = deData.results[0];
         country = 'de';
       } else {
-        // Fallback: US storefront
-        const usRes  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}`);
-        const usData = await usRes.json();
-        if (usData.results?.[0]?.previewUrl) {
-          r = usData.results[0];
-          country = 'us';
+        // Fallback: Netherlands (non-censoring)
+        const nlRes  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=nl`);
+        const nlData = await nlRes.json();
+        if (nlData.results?.[0]?.previewUrl) {
+          r = nlData.results[0];
+          country = 'nl';
         }
       }
 
