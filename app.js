@@ -270,7 +270,7 @@ async function removeFromLibrary(id) {
 
 async function searchSongs(query) {
   const makeUrl = attr =>
-    `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=30${attr}`;
+    `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=30&country=de${attr}`;
 
   const [r1, r2] = await Promise.all([
     fetch(makeUrl('&attribute=artistTerm')),
@@ -318,7 +318,7 @@ async function resolveOriginalYear(song) {
   if (!cleanTitle) return song;
 
   try {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle + ' ' + song.artist)}&media=music&entity=song&limit=50`;
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle + ' ' + song.artist)}&media=music&entity=song&limit=50&country=de`;
     const res = await fetch(url);
     if (!res.ok) return song;
     const data = await res.json();
@@ -416,15 +416,20 @@ function startAudio(url) {
   audio.src = url;
   audio.volume = currentVolume;
 
-  const playBtn = document.getElementById('play-btn');
-  const playIcon = document.getElementById('play-icon');
+  const playBtn     = document.getElementById('play-btn');
+  const playIcon    = document.getElementById('play-icon');
   const progressFill = document.getElementById('progress-fill');
   const timerDisplay = document.getElementById('timer-display');
+  const arc          = document.getElementById('timer-ring-arc');
+  const circumference = 2 * Math.PI * 19;
+
+  if (arc) arc.style.strokeDashoffset = '0';
 
   function updateProgress() {
     if (!audio.duration) return;
-    const pct = (audio.currentTime / audio.duration) * 100;
-    progressFill.style.width = `${pct}%`;
+    const pct = audio.currentTime / audio.duration;
+    progressFill.style.width = `${pct * 100}%`;
+    if (arc) arc.style.strokeDashoffset = String(circumference * pct);
     const remaining = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
     const m = Math.floor(remaining / 60);
     const s = remaining % 60;
@@ -433,13 +438,13 @@ function startAudio(url) {
 
   progressInterval = setInterval(updateProgress, 250);
 
-  // Use property assignment so each new song replaces the previous handler
-  audio.onplay = () => { playIcon.textContent = '⏸'; };
-  audio.onpause = () => { playIcon.textContent = '▶'; };
+  audio.onplay  = () => { if (playIcon) playIcon.textContent = '⏸'; };
+  audio.onpause = () => { if (playIcon) playIcon.textContent = '▶'; };
   audio.onended = () => {
-    playIcon.textContent = '▶';
+    if (playIcon) playIcon.textContent = '▶';
     progressFill.style.width = '100%';
     timerDisplay.textContent = '0:00';
+    if (arc) arc.style.strokeDashoffset = String(circumference);
   };
 
   playBtn.onclick = () => {
@@ -448,7 +453,7 @@ function startAudio(url) {
   };
 
   startVisualizer();
-  audio.play().catch(() => { playIcon.textContent = '▶'; });
+  audio.play().catch(() => { if (playIcon) playIcon.textContent = '▶'; });
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────
@@ -508,6 +513,7 @@ function renderLibrary() {
 
   if (!state.library.length) {
     list.innerHTML = '';
+    list.className = 'song-list';
     empty.style.display = 'block';
     return;
   }
@@ -516,40 +522,80 @@ function renderLibrary() {
     if (state.librarySort === 'artist')    return a.artist.localeCompare(b.artist);
     if (state.librarySort === 'year')      return (a.year || 0) - (b.year || 0);
     if (state.librarySort === 'knowledge') return knowledgeScore(a.id) - knowledgeScore(b.id);
-    if (state.librarySort === 'added')     return 0; // DB returns newest-first already
-    return a.title.localeCompare(b.title); // default: title
-  });
-  list.innerHTML = sorted.map((song) => {
-    const fm = getFieldMastery(song.id);
-    const mark = s => s === 'known' ? '✓' : '✗';
-    const tooltip = `Title ${mark(fm.title)} · Artist ${mark(fm.artist)} · Year ${mark(fm.year)}`;
-    return `
-    <div class="song-row">
-      <img src="${song.artwork}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-      <div class="song-row-info">
-        <div class="song-row-title">${esc(song.title)}</div>
-        <div class="song-row-sub">${esc(song.artist)} · ${song.year}</div>
-      </div>
-      <span class="mastery-dots" title="${tooltip}">
-        <span class="mastery-dot-field mastery-field-${fm.title}"></span>
-        <span class="mastery-dot-field mastery-field-${fm.artist}"></span>
-        <span class="mastery-dot-field mastery-field-${fm.year}"></span>
-      </span>
-      <button class="history-btn" data-id="${song.id}" title="View history"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg></button>
-      <button class="remove-btn" data-id="${song.id}" title="Remove">×</button>
-    </div>`;
-  }).join('');
-
-  list.querySelectorAll('.remove-btn').forEach(btn => {
-    btn.addEventListener('click', () => removeFromLibrary(Number(btn.dataset.id)));
+    if (state.librarySort === 'added')     return 0;
+    return a.title.localeCompare(b.title);
   });
 
-  list.querySelectorAll('.history-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const song = state.library.find(s => String(s.id) === btn.dataset.id);
-      if (song) openSongHistory(song);
+  const viewMode = localStorage.getItem('muzquiz_libview') || 'list';
+
+  if (viewMode === 'card') {
+    list.className = 'song-grid-cards';
+    list.innerHTML = sorted.map(song => {
+      const maxInterval = Math.max(
+        song.srInterval_title  || 0,
+        song.srInterval_artist || 0,
+        song.srInterval_year   || 0,
+      );
+      const blocks = maxInterval === 0 ? 0 : maxInterval <= 1 ? 1 : maxInterval <= 3 ? 2 : maxInterval <= 7 ? 3 : maxInterval <= 14 ? 4 : 5;
+      return `
+        <div class="song-card-grid" data-id="${song.id}">
+          <div class="scg-top">
+            <img class="scg-art" src="${esc(song.artwork)}" alt="" width="48" height="48" loading="lazy" onerror="this.style.visibility='hidden'">
+            <div class="scg-info">
+              <div class="scg-title">${esc(song.title)}</div>
+              <div class="scg-artist">${esc(song.artist)}</div>
+            </div>
+          </div>
+          <div class="scg-meta">
+            <span class="scg-year">${song.year}</span>
+            ${song.genre ? `<span class="scg-genre">${esc(song.genre)}</span>` : ''}
+          </div>
+          <div class="scg-knowledge">
+            ${[0,1,2,3,4].map(i => `<span class="scg-kb-block${i < blocks ? ' scg-kb-block--filled' : ''}"></span>`).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.song-card-grid').forEach(card => {
+      card.addEventListener('click', () => {
+        const song = state.library.find(s => String(s.id) === card.dataset.id);
+        if (song) openSongHistory(song);
+      });
     });
-  });
+  } else {
+    list.className = 'song-list';
+    list.innerHTML = sorted.map(song => {
+      const fm = getFieldMastery(song.id);
+      const mark = s => s === 'known' ? '✓' : '✗';
+      const tooltip = `Title ${mark(fm.title)} · Artist ${mark(fm.artist)} · Year ${mark(fm.year)}`;
+      return `
+        <div class="song-row">
+          <img src="${esc(song.artwork)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+          <div class="song-row-info">
+            <div class="song-row-title">${esc(song.title)}</div>
+            <div class="song-row-sub">${esc(song.artist)} · ${song.year}</div>
+          </div>
+          <span class="mastery-dots" title="${tooltip}">
+            <span class="mastery-dot-field mastery-field-${fm.title}"></span>
+            <span class="mastery-dot-field mastery-field-${fm.artist}"></span>
+            <span class="mastery-dot-field mastery-field-${fm.year}"></span>
+          </span>
+          <button class="history-btn" data-id="${song.id}" title="View history"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg></button>
+          <button class="remove-btn" data-id="${song.id}" title="Remove">×</button>
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => removeFromLibrary(Number(btn.dataset.id)));
+    });
+
+    list.querySelectorAll('.history-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const song = state.library.find(s => String(s.id) === btn.dataset.id);
+        if (song) openSongHistory(song);
+      });
+    });
+  }
 }
 
 function renderMasteryOverview() {
@@ -594,7 +640,25 @@ function renderMasteryOverview() {
     }
   }
 
-  el.innerHTML = `<p class="sr-due-line">Due today: <span class="sr-due-count">${dueToday}</span> &nbsp;·&nbsp; New: <span class="sr-due-count">${newSongs}</span> &nbsp;·&nbsp; Learned: <span class="sr-due-count">${learned}</span> &nbsp;·&nbsp; Not due: <span class="sr-due-count">${notDue}</span></p>`;
+  const total = state.library.length;
+  const duePct     = total ? (dueToday / total) * 100 : 0;
+  const newPct     = total ? (newSongs  / total) * 100 : 0;
+  const learnedPct = total ? (learned   / total) * 100 : 0;
+  const notDuePct  = total ? (notDue    / total) * 100 : 0;
+
+  el.innerHTML = `
+    <div class="mastery-seg-bar-track">
+      <div class="msb-seg msb-due"     style="width:${duePct}%"></div>
+      <div class="msb-seg msb-new"     style="width:${newPct}%"></div>
+      <div class="msb-seg msb-learned" style="width:${learnedPct}%"></div>
+      <div class="msb-seg msb-notdue"  style="width:${notDuePct}%"></div>
+    </div>
+    <div class="mastery-seg-legend">
+      <span class="msl-item"><span class="msl-dot" style="background:var(--accent)"></span>${dueToday} due</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--warning)"></span>${newSongs} new</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--success)"></span>${learned} learned</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--text-3)"></span>${notDue} not due</span>
+    </div>`;
 }
 
 async function backfillGenres() {
@@ -640,6 +704,52 @@ async function backfillGenres() {
 
   if (statusEl) statusEl.textContent = `Done — fixed ${fixed}${failed ? `, ${failed} not found` : ''}.`;
   renderGenreGrid();
+}
+
+async function refreshPreviews() {
+  const songs = state.library;
+  if (!songs.length) return;
+
+  const btn      = document.getElementById('refresh-previews-btn');
+  const statusEl = document.getElementById('refresh-previews-status');
+  if (btn) btn.disabled = true;
+
+  let updated = 0, failed = 0;
+
+  for (let i = 0; i < songs.length; i++) {
+    const song = songs[i];
+    if (statusEl) statusEl.textContent = `${i + 1} / ${songs.length}…`;
+
+    try {
+      const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=de`);
+      const data = await res.json();
+      const r    = data.results?.[0];
+      if (r?.previewUrl) {
+        const artwork = (r.artworkUrl100 || '').replace('100x100bb', '300x300bb');
+        await fetch(`/api/songs/${song.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preview_url: r.previewUrl, artwork_url: artwork }),
+        });
+        song.previewUrl  = r.previewUrl;
+        song.artwork_url = artwork;
+        updated++;
+      } else {
+        failed++;
+      }
+    } catch {
+      failed++;
+    }
+
+    if (i < songs.length - 1) {
+      const delay = (i + 1) % 20 === 0 ? 2000 : 150;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+
+  if (statusEl) statusEl.textContent = `Done — ${updated} updated${failed ? `, ${failed} not found` : ''}.`;
+  if (btn) btn.disabled = false;
+  showToast(`Previews refreshed: ${updated} updated.`);
 }
 
 function genreStats(songs) {
@@ -696,11 +806,22 @@ function renderGenreGrid() {
       const isExpanded = expandedGenre === g;
       const masteryPct = st.total > 0 ? Math.round((st.learned / st.total) * 100) : 0;
 
-      const summaryStats = st.due > 0
-        ? `<span class="gc-due">${st.due} due</span>`
-        : st.new > 0
-          ? `<span class="gc-new">${st.new} new</span>`
-          : `<span class="gc-ok">up to date</span>`;
+      const tot = st.total || 1;
+      const duePct2     = (st.due     / tot) * 100;
+      const newPct2     = (st.new     / tot) * 100;
+      const learnedPct2 = (st.learned / tot) * 100;
+      const notDuePct2  = (st.notDue  / tot) * 100;
+
+      const accentClass = st.due > 0
+        ? 'genre-card--has-due'
+        : st.new === st.total ? 'genre-card--all-new' : '';
+
+      const miniBar = `<div class="gc-mini-bar">
+        <div class="gc-mb-seg gc-mb-due"     style="width:${duePct2}%"></div>
+        <div class="gc-mb-seg gc-mb-new"     style="width:${newPct2}%"></div>
+        <div class="gc-mb-seg gc-mb-learned" style="width:${learnedPct2}%"></div>
+        <div class="gc-mb-seg gc-mb-notdue"  style="width:${notDuePct2}%"></div>
+      </div>`;
 
       const expandedHtml = isExpanded ? `
         <div class="genre-card-detail">
@@ -720,8 +841,8 @@ function renderGenreGrid() {
           <div class="gc-song-list">
             ${[...songs].sort((a, b) => statusOrder[songStatus(a)] - statusOrder[songStatus(b)]).map(s => {
               const status = songStatus(s);
-              return `<div class="gc-song-row">
-                <img class="gc-song-art" src="${esc(s.artwork || '')}" alt="" width="32" height="32" onerror="this.style.display='none'">
+              return `<div class="gc-song-row" data-id="${s.id}">
+                <img class="gc-song-art" src="${esc(s.artwork || '')}" alt="" width="30" height="30" onerror="this.style.display='none'">
                 <div class="gc-song-info">
                   <span class="gc-song-title">${esc(s.title)}</span>
                   <span class="gc-song-artist">${esc(s.artist)}</span>
@@ -732,11 +853,12 @@ function renderGenreGrid() {
           </div>
         </div>` : '';
 
-      return `<div class="genre-card${isExpanded ? ' expanded' : ''}" data-genre="${esc(g)}">
+      return `<div class="genre-card${isExpanded ? ' expanded' : ''} ${accentClass}" data-genre="${esc(g)}">
         <div class="genre-card-main">
           <div class="genre-card-text">
-            <div class="genre-card-name">${esc(label)}</div>
-            <div class="genre-card-summary">${st.total} songs · ${summaryStats}</div>
+            <span class="genre-card-name">${esc(label)}</span>
+            <div class="genre-card-count">${st.total} songs</div>
+            ${miniBar}
           </div>
           <button class="genre-card-practice-btn btn-primary" data-genre="${esc(g)}">Practice</button>
         </div>
@@ -756,6 +878,14 @@ function renderGenreGrid() {
         e.stopPropagation();
         state.quizConfig = { count: null, genres: [btn.dataset.genre] };
         startSession();
+      });
+    });
+
+    grid.querySelectorAll('.gc-song-row').forEach(row => {
+      row.addEventListener('click', e => {
+        e.stopPropagation();
+        const song = state.library.find(s => String(s.id) === row.dataset.id);
+        if (song) openSongHistory(song);
       });
     });
   }
@@ -846,6 +976,17 @@ function renderQuestion() {
   const q = state.quizQuestions[state.quizIndex];
   const total = state.quizQuestions.length;
 
+  // Update album art section
+  const artBg    = document.getElementById('quiz-art-bg');
+  const artThumb = document.getElementById('quiz-art-thumb');
+  if (artBg && q.song.artwork) {
+    artBg.style.backgroundImage = `url(${q.song.artwork})`;
+  }
+  if (artThumb) {
+    artThumb.src = q.song.artwork || '';
+    artThumb.style.display = q.song.artwork ? 'block' : 'none';
+  }
+
   document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
   const progressFillEl = document.getElementById('quiz-progress-fill');
   if (progressFillEl) progressFillEl.style.width = `${((state.quizIndex + 1) / total) * 100}%`;
@@ -868,7 +1009,7 @@ function renderQuestion() {
     resultEl.textContent = '';
     resultEl.className = 'field-result';
     const hintEl = document.getElementById(`hint-${type}`);
-    if (hintEl) hintEl.textContent = '';
+    if (hintEl) { hintEl.textContent = ''; hintEl.classList.remove('visible'); }
 
     input.oninput = () => {
       if (state.quizQuestions[state.quizIndex].submitted) return;
@@ -951,12 +1092,17 @@ function handleAnswer() {
       input.className = 'answer-input correct';
       resultEl.textContent = '✓';
       resultEl.className = 'field-result correct';
-      if (hintEl) hintEl.textContent = '';
+      if (hintEl) { hintEl.textContent = ''; hintEl.classList.remove('visible'); }
     } else {
       input.className = 'answer-input wrong';
       resultEl.textContent = '✗';
       resultEl.className = 'field-result wrong';
-      if (hintEl) hintEl.textContent = answers[type];
+      if (hintEl) {
+        hintEl.classList.remove('visible');
+        hintEl.textContent = answers[type];
+        void hintEl.offsetWidth; // force reflow for animation
+        hintEl.classList.add('visible');
+      }
     }
   }
 
@@ -1057,10 +1203,40 @@ function showReview() {
     for (const t of ['title', 'artist', 'year']) if (a.correct[t]) totals[t]++;
   }
 
+  // Score hero
+  let hero = document.getElementById('review-score-hero');
+  if (!hero) {
+    hero = document.createElement('div');
+    hero.id = 'review-score-hero';
+    hero.className = 'review-score-hero';
+    const statBoxes = document.getElementById('review-stat-boxes');
+    statBoxes.parentNode.insertBefore(hero, statBoxes);
+  }
+  const totalCorrect = totals.title + totals.artist + totals.year;
+  const totalPossible = n * 3;
+  const overallPct = totalPossible > 0 ? Math.round((totalCorrect / totalPossible) * 100) : 0;
+  hero.innerHTML = `<div class="review-score-number">${overallPct}%</div>`;
+
+  const tPct = n > 0 ? Math.round((totals.title  / n) * 100) : 0;
+  const aPct = n > 0 ? Math.round((totals.artist / n) * 100) : 0;
+  const yPct = n > 0 ? Math.round((totals.year   / n) * 100) : 0;
+
   document.getElementById('review-stat-boxes').innerHTML = `
-    <div class="review-stat-box"><span class="review-stat-num">${totals.title}/${n}</span><span class="review-stat-label">Title</span></div>
-    <div class="review-stat-box"><span class="review-stat-num">${totals.artist}/${n}</span><span class="review-stat-label">Artist</span></div>
-    <div class="review-stat-box"><span class="review-stat-num">${totals.year}/${n}</span><span class="review-stat-label">Year</span></div>
+    <div class="review-stat-box">
+      <span class="review-stat-pct">${tPct}%</span>
+      <span class="review-stat-label">Title</span>
+      <div class="review-stat-bar-track"><div class="review-stat-bar-fill" style="width:${tPct}%"></div></div>
+    </div>
+    <div class="review-stat-box">
+      <span class="review-stat-pct">${aPct}%</span>
+      <span class="review-stat-label">Artist</span>
+      <div class="review-stat-bar-track"><div class="review-stat-bar-fill" style="width:${aPct}%"></div></div>
+    </div>
+    <div class="review-stat-box">
+      <span class="review-stat-pct">${yPct}%</span>
+      <span class="review-stat-label">Year</span>
+      <div class="review-stat-bar-track"><div class="review-stat-bar-fill" style="width:${yPct}%"></div></div>
+    </div>
   `;
 
   const allGood = answers.filter(a => a.correct.title && a.correct.artist && a.correct.year);
@@ -1131,22 +1307,27 @@ async function renderStats() {
 
   if (data.hardestSongs.length) {
     document.getElementById('stats-hardest').innerHTML = data.hardestSongs.map(s => {
+      const attempts = (s.attempts_title || 0) + (s.attempts_artist || 0) + (s.attempts_year || 0);
+      const correct  = (s.score_title  || 0) + (s.score_artist  || 0) + (s.score_year  || 0);
+      const accuracyPct = attempts > 0 ? Math.round((correct / attempts) * 100) : 0;
       const fm = {
         title:  s.attempts_title  > 0 ? (s.score_title  >= 1 && s.score_title  / s.attempts_title  >= 0.5 ? 'known' : 'wrong') : 'unheard',
         artist: s.attempts_artist > 0 ? (s.score_artist >= 1 && s.score_artist / s.attempts_artist >= 0.5 ? 'known' : 'wrong') : 'unheard',
         year:   s.attempts_year   > 0 ? (s.score_year   >= 1 && s.score_year   / s.attempts_year   >= 0.5 ? 'known' : 'wrong') : 'unheard',
       };
-      return `<div class="song-row">
-        <img src="${esc(s.artwork_url || '')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-        <div class="song-row-info">
-          <div class="song-row-title">${esc(s.title)}</div>
-          <div class="song-row-sub">${esc(s.artist)}</div>
+      return `<div class="hardest-song-row">
+        <div class="hardest-row-bg" style="width:${accuracyPct}%"></div>
+        <img src="${esc(s.artwork_url || '')}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" style="position:relative;z-index:1;width:28px;height:28px;border-radius:4px;object-fit:cover;flex-shrink:0">
+        <div class="hardest-song-info">
+          <div class="hardest-song-title">${esc(s.title)}</div>
+          <div class="hardest-song-artist">${esc(s.artist)}</div>
         </div>
-        <span class="mastery-dots">
+        <span class="mastery-dots" style="position:relative;z-index:1">
           <span class="mastery-dot-field mastery-field-${fm.title}"></span>
           <span class="mastery-dot-field mastery-field-${fm.artist}"></span>
           <span class="mastery-dot-field mastery-field-${fm.year}"></span>
         </span>
+        <span class="hardest-pct">${accuracyPct}%</span>
       </div>`;
     }).join('');
   } else {
@@ -1180,20 +1361,29 @@ function drawSessionsChart(sessions) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  const maxCount = Math.max(...reversed.map(s => s.song_count || 0), 1);
-  const n = reversed.length;
+  const counts   = reversed.map(s => s.song_count || 0);
+  const maxCount = Math.max(...counts, 1);
+  const sorted   = [...counts].sort((a, b) => a - b);
+  const mid      = Math.floor(sorted.length / 2);
+  const median   = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
+  const n    = reversed.length;
   const gap  = 3;
   const barW = Math.max(4, (W - gap * (n + 1)) / n);
 
   reversed.forEach((s, i) => {
-    const correct  = (s.correct_title || 0) + (s.correct_artist || 0) + (s.correct_year || 0);
-    const possible = (s.song_count || 0) * 3;
-    const pct  = possible > 0 ? correct / possible : 0;
-    const barH = Math.max(2, ((s.song_count || 0) / maxCount) * (H - 8));
-    const x    = gap + i * (barW + gap);
-    const y    = H - barH;
+    const count = s.song_count || 0;
+    const barH  = Math.max(2, (count / maxCount) * (H - 8));
+    const x     = gap + i * (barW + gap);
+    const y     = H - barH;
 
-    ctx.fillStyle = `rgba(29, 206, 150, ${0.25 + pct * 0.75})`;
+    const ratio = median > 0 ? count / median : 1;
+    let color;
+    if (ratio < 0.6)       color = 'rgba(120,120,120,0.7)';
+    else if (ratio < 1.4)  color = 'rgba(245,158,11,0.85)';
+    else                   color = 'rgba(232,71,58,0.9)';
+
+    ctx.fillStyle = color;
     ctx.fillRect(x, y, barW, barH);
   });
 }
@@ -1427,7 +1617,7 @@ function parsePasteLines(text) {
 
 async function searchBestMatch({ artist, title }) {
   const query = artist ? `${artist} ${title}` : title;
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10`;
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10&country=de`;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, 2500 * attempt));
@@ -1737,7 +1927,120 @@ async function startSession() {
   renderQuestion();
 }
 
+// ── Toast ─────────────────────────────────────────────────────────────────
+
+function showToast(msg) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  container.innerHTML = '';
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
 async function init() {
+  // ── Toast container ──────────────────────────────────────────────────────
+  const toastContainer = document.createElement('div');
+  toastContainer.id = 'toast-container';
+  toastContainer.className = 'toast-container';
+  document.body.appendChild(toastContainer);
+
+  // ── Quiz art section: wrap canvas + inject bg + thumb ────────────────────
+  const visualizerEl = document.getElementById('visualizer');
+  if (visualizerEl) {
+    const artSection = document.createElement('div');
+    artSection.className = 'quiz-art-section';
+
+    const artBg = document.createElement('div');
+    artBg.id = 'quiz-art-bg';
+    artBg.className = 'quiz-art-bg';
+
+    const artThumb = document.createElement('img');
+    artThumb.id = 'quiz-art-thumb';
+    artThumb.alt = '';
+
+    visualizerEl.parentNode.insertBefore(artSection, visualizerEl);
+    artSection.appendChild(artBg);
+    artSection.appendChild(visualizerEl);
+    artSection.appendChild(artThumb);
+  }
+
+  // ── Timer ring: wrap play button in SVG ring ─────────────────────────────
+  const playBtnEl = document.getElementById('play-btn');
+  if (playBtnEl) {
+    const ring = document.createElement('div');
+    ring.className = 'play-ring';
+    const circ = (2 * Math.PI * 19).toFixed(2);
+    ring.innerHTML = `<svg class="play-ring-svg" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="22" cy="22" r="19" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2.5"/>
+      <circle id="timer-ring-arc" cx="22" cy="22" r="19" fill="none" stroke="var(--accent)" stroke-width="2.5"
+        stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="0"
+        transform="rotate(-90 22 22)"/>
+    </svg>`;
+    playBtnEl.parentNode.insertBefore(ring, playBtnEl);
+    ring.appendChild(playBtnEl);
+  }
+
+  // ── Sort pills: replace <select> with pill buttons ───────────────────────
+  const sortSelect = document.getElementById('library-sort');
+  if (sortSelect) {
+    const sortPills = document.createElement('div');
+    sortPills.className = 'sort-pills';
+    const sortOpts = [
+      { value: 'title',     label: 'Title' },
+      { value: 'artist',    label: 'Artist' },
+      { value: 'year',      label: 'Year' },
+      { value: 'knowledge', label: 'Weakest' },
+      { value: 'added',     label: 'Added' },
+    ];
+    sortOpts.forEach(opt => {
+      const pill = document.createElement('button');
+      pill.className = 'sort-pill' + (state.librarySort === opt.value ? ' active' : '');
+      pill.textContent = opt.label;
+      pill.dataset.value = opt.value;
+      pill.addEventListener('click', () => {
+        state.librarySort = opt.value;
+        sortPills.querySelectorAll('.sort-pill').forEach(p =>
+          p.classList.toggle('active', p.dataset.value === opt.value));
+        renderLibrary();
+      });
+      sortPills.appendChild(pill);
+    });
+    sortSelect.parentNode.insertBefore(sortPills, sortSelect);
+  }
+
+  // ── View toggle button (list ↔ card) ─────────────────────────────────────
+  const libActions = document.querySelector('.library-actions');
+  if (libActions) {
+    const listIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+    const gridIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`;
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'btn-ghost btn-sm view-toggle-btn';
+    toggleBtn.id = 'lib-view-toggle';
+    const savedView = localStorage.getItem('muzquiz_libview') || 'list';
+    toggleBtn.innerHTML = savedView === 'card' ? listIcon : gridIcon;
+    toggleBtn.title = savedView === 'card' ? 'Switch to list' : 'Switch to grid';
+    libActions.insertBefore(toggleBtn, libActions.firstChild);
+    toggleBtn.addEventListener('click', () => {
+      const cur = localStorage.getItem('muzquiz_libview') || 'list';
+      const next = cur === 'list' ? 'card' : 'list';
+      localStorage.setItem('muzquiz_libview', next);
+      toggleBtn.innerHTML = next === 'card' ? listIcon : gridIcon;
+      toggleBtn.title = next === 'card' ? 'Switch to list' : 'Switch to grid';
+      renderLibrary();
+    });
+  }
+
   await loadLibrary();
 
   // One-time migration: if the DB is empty and localStorage has songs, import them.
@@ -1831,6 +2134,7 @@ async function init() {
     renderLibrary();
   });
 
+  document.getElementById('refresh-previews-btn').addEventListener('click', refreshPreviews);
   document.getElementById('import-btn').addEventListener('click', () => openModal());
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('import-cancel-btn').addEventListener('click', closeModal);
