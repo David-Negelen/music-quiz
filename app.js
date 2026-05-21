@@ -722,6 +722,7 @@ async function refreshPreviews() {
 
   let updated = 0, failed = 0;
   const FALLBACK_COUNTRIES = ['de', 'nl', 'se', 'fr'];
+  const pause = ms => new Promise(res => setTimeout(res, ms));
 
   for (let i = 0; i < todo.length; i++) {
     const song = todo[i];
@@ -734,33 +735,38 @@ async function refreshPreviews() {
 
       // 1. Try lookup by original ID on European storefronts
       for (const c of FALLBACK_COUNTRIES) {
+        if (r) break;
+        await pause(150);
         const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=${c}`);
+        if (!res.ok) break; // rate-limited — skip remaining countries
         const data = await res.json();
-        if (data.results?.[0]?.previewUrl) {
-          r = data.results[0];
-          country = c;
-          break;
-        }
+        if (data.results?.[0]?.previewUrl) { r = data.results[0]; country = c; }
       }
 
       // 2. ID not in any European catalog — search by artist+title on DE
       if (!r && song.title && song.artist) {
+        await pause(200);
         const q   = encodeURIComponent(`${song.artist} ${song.title}`);
         const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=10&country=de`);
-        const data = await res.json();
-        if (data.results?.length) {
-          const explicit = data.results.find(t => t.previewUrl && t.trackExplicitness === 'explicit');
-          const any      = data.results.find(t => t.previewUrl);
-          const best = explicit || any;
-          if (best) { r = best; country = 'de'; }
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results?.length) {
+            const explicit = data.results.find(t => t.previewUrl && t.trackExplicitness === 'explicit');
+            const any      = data.results.find(t => t.previewUrl);
+            const best = explicit || any;
+            if (best) { r = best; country = 'de'; }
+          }
         }
       }
 
       // 3. Last resort: US lookup by original ID
       if (!r) {
+        await pause(200);
         const res  = await fetch(`https://itunes.apple.com/lookup?id=${song.id}&country=us`);
-        const data = await res.json();
-        if (data.results?.[0]?.previewUrl) { r = data.results[0]; country = 'us'; }
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results?.[0]?.previewUrl) { r = data.results[0]; country = 'us'; }
+        }
       }
 
       if (r) {
@@ -790,11 +796,6 @@ async function refreshPreviews() {
       }
     } catch {
       failed++;
-    }
-
-    if (i < todo.length - 1) {
-      const delay = (i + 1) % 20 === 0 ? 2000 : 150;
-      await new Promise(r => setTimeout(r, delay));
     }
   }
 
