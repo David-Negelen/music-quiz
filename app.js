@@ -844,47 +844,28 @@ async function refreshPreviews() {
 function genreStats(songs) {
   const today = new Date().toISOString().slice(0, 10);
   let newCount = 0, due = 0, learned = 0, notDue = 0;
+  let ms0 = 0, ms1 = 0, ms2 = 0, ms3 = 0, msUnheard = 0;
   for (const s of songs) {
     const isNew = !s.srDue_title && !s.srDue_artist && !s.srDue_year;
-    if (isNew) { newCount++; continue; }
-    const anyDue = ['title', 'artist', 'year'].some(f => { const d = s[`srDue_${f}`]; return d && d <= today; });
-    if (anyDue) { due++; continue; }
-    const allLearned = s.srReviews_title >= 3 && s.srReviews_artist >= 3 && s.srReviews_year >= 3;
-    if (allLearned) learned++; else notDue++;
+    if (isNew) { newCount++; }
+    else {
+      const anyDue = ['title', 'artist', 'year'].some(f => { const d = s[`srDue_${f}`]; return d && d <= today; });
+      if (anyDue) { due++; }
+      else {
+        const allLearned = s.srReviews_title >= 3 && s.srReviews_artist >= 3 && s.srReviews_year >= 3;
+        if (allLearned) learned++; else notDue++;
+      }
+    }
+    const m = getMastery(s.id);
+    if (m === 'unheard') msUnheard++;
+    else if (m === 's0') ms0++;
+    else if (m === 's1') ms1++;
+    else if (m === 's2') ms2++;
+    else ms3++;
   }
-  return { total: songs.length, new: newCount, due, learned, notDue };
+  return { total: songs.length, new: newCount, due, learned, notDue, ms0, ms1, ms2, ms3, msUnheard };
 }
 
-const GENRE_GRADIENTS = {
-  'hip-hop':     'linear-gradient(135deg, rgba(220,50,80,0.45) 0%, rgba(100,30,120,0.15) 60%, transparent 100%)',
-  'rap':         'linear-gradient(135deg, rgba(220,50,80,0.45) 0%, rgba(100,30,120,0.15) 60%, transparent 100%)',
-  'r&b':         'linear-gradient(135deg, rgba(130,60,240,0.42) 0%, rgba(200,50,130,0.14) 60%, transparent 100%)',
-  'soul':        'linear-gradient(135deg, rgba(210,110,50,0.42) 0%, rgba(160,70,30,0.14) 60%, transparent 100%)',
-  'pop':         'linear-gradient(135deg, rgba(230,70,200,0.40) 0%, rgba(100,60,220,0.14) 60%, transparent 100%)',
-  'rock':        'linear-gradient(135deg, rgba(210,90,20,0.44) 0%, rgba(140,50,20,0.14) 60%, transparent 100%)',
-  'hard rock':   'linear-gradient(135deg, rgba(180,40,40,0.44) 0%, rgba(100,30,30,0.14) 60%, transparent 100%)',
-  'electronic':  'linear-gradient(135deg, rgba(20,190,230,0.40) 0%, rgba(20,90,210,0.14) 60%, transparent 100%)',
-  'dance':       'linear-gradient(135deg, rgba(20,190,230,0.40) 0%, rgba(20,90,210,0.14) 60%, transparent 100%)',
-  'country':     'linear-gradient(135deg, rgba(210,160,40,0.42) 0%, rgba(140,90,20,0.14) 60%, transparent 100%)',
-  'alternative': 'linear-gradient(135deg, rgba(80,140,220,0.42) 0%, rgba(40,90,170,0.14) 60%, transparent 100%)',
-  'indie':       'linear-gradient(135deg, rgba(50,210,140,0.40) 0%, rgba(30,150,100,0.14) 60%, transparent 100%)',
-  'metal':       'linear-gradient(135deg, rgba(120,90,90,0.48) 0%, rgba(60,40,40,0.16) 60%, transparent 100%)',
-  'jazz':        'linear-gradient(135deg, rgba(230,190,50,0.42) 0%, rgba(170,110,20,0.14) 60%, transparent 100%)',
-  'classical':   'linear-gradient(135deg, rgba(230,215,170,0.36) 0%, rgba(170,150,110,0.12) 60%, transparent 100%)',
-  'soundtrack':  'linear-gradient(135deg, rgba(100,120,200,0.40) 0%, rgba(60,80,160,0.14) 60%, transparent 100%)',
-  'reggae':      'linear-gradient(135deg, rgba(50,190,80,0.42) 0%, rgba(210,170,20,0.14) 60%, transparent 100%)',
-  'latin':       'linear-gradient(135deg, rgba(230,120,30,0.42) 0%, rgba(210,60,60,0.14) 60%, transparent 100%)',
-  'blues':       'linear-gradient(135deg, rgba(50,110,210,0.42) 0%, rgba(30,60,150,0.14) 60%, transparent 100%)',
-  'singer':      'linear-gradient(135deg, rgba(180,140,220,0.40) 0%, rgba(120,80,180,0.14) 60%, transparent 100%)',
-};
-
-function getGenreGradient(genre) {
-  const g = genre.toLowerCase();
-  for (const [key, grad] of Object.entries(GENRE_GRADIENTS)) {
-    if (g.includes(key)) return grad;
-  }
-  return null;
-}
 
 function renderGenreGrid() {
   const grid = document.getElementById('genre-grid');
@@ -932,15 +913,18 @@ function renderGenreGrid() {
       const learnedPct2 = (st.learned / tot) * 100;
       const notDuePct2  = (st.notDue  / tot) * 100;
 
-      const accentClass = st.due > 0
-        ? 'genre-card--has-due'
-        : st.new === st.total ? 'genre-card--all-new' : '';
+      const ms0Pct = (st.ms0      / tot) * 100;
+      const ms1Pct = (st.ms1      / tot) * 100;
+      const ms2Pct = (st.ms2      / tot) * 100;
+      const ms3Pct = (st.ms3      / tot) * 100;
+      const msUPct = (st.msUnheard / tot) * 100;
 
       const miniBar = `<div class="gc-mini-bar">
-        <div class="gc-mb-seg gc-mb-due"     style="width:${duePct2}%"></div>
-        <div class="gc-mb-seg gc-mb-new"     style="width:${newPct2}%"></div>
-        <div class="gc-mb-seg gc-mb-learned" style="width:${learnedPct2}%"></div>
-        <div class="gc-mb-seg gc-mb-notdue"  style="width:${notDuePct2}%"></div>
+        <div class="gc-mb-seg gc-mb-s3"      style="width:${ms3Pct}%"></div>
+        <div class="gc-mb-seg gc-mb-s2"      style="width:${ms2Pct}%"></div>
+        <div class="gc-mb-seg gc-mb-s1"      style="width:${ms1Pct}%"></div>
+        <div class="gc-mb-seg gc-mb-s0"      style="width:${ms0Pct}%"></div>
+        <div class="gc-mb-seg gc-mb-unheard" style="width:${msUPct}%"></div>
       </div>`;
 
       const expandedHtml = isExpanded ? `
@@ -973,10 +957,7 @@ function renderGenreGrid() {
           </div>
         </div>` : '';
 
-      const gradient = getGenreGradient(g);
-      const gradStyle = gradient ? ` style="--genre-gradient:${gradient}"` : '';
-
-      return `<div class="genre-card${isExpanded ? ' expanded' : ''} ${accentClass}" data-genre="${esc(g)}"${gradStyle}>
+      return `<div class="genre-card${isExpanded ? ' expanded' : ''}" data-genre="${esc(g)}">
         <div class="genre-card-main">
           <div class="genre-card-text">
             <span class="genre-card-name">${esc(label)}</span>
