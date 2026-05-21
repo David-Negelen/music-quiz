@@ -14,8 +14,9 @@ try {
   }
 } catch {}
 
-const PORT = 3000;
-const db   = new Database(path.join(__dirname, 'db.sqlite'));
+const PORT   = process.env.PORT || 3000;
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'db.sqlite');
+const db     = new Database(dbPath);
 
 // ── Schema ─────────────────────────────────────────────────────────────────
 
