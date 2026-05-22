@@ -1080,17 +1080,19 @@ function renderQuestion() {
   const q = state.quizQuestions[state.quizIndex];
   const total = state.quizQuestions.length;
 
-  // Update album art section
+  // Update album art section — swap the image AFTER the fade-out transition
+  // so the next song's cover isn't visible during the 0.4s opacity animation.
   const artBg    = document.getElementById('quiz-art-bg');
   const artThumb = document.getElementById('quiz-art-thumb');
-  if (artBg && q.song.artwork) {
-    artBg.style.backgroundImage = `url(${q.song.artwork})`;
+  const newArtwork = q.song.artwork;
+  if (artBg) {
     artBg.classList.remove('revealed');
+    setTimeout(() => { artBg.style.backgroundImage = newArtwork ? `url(${newArtwork})` : ''; }, 400);
   }
   if (artThumb) {
-    artThumb.src = q.song.artwork || '';
-    artThumb.style.display = q.song.artwork ? 'block' : 'none';
     artThumb.classList.remove('revealed');
+    artThumb.style.display = newArtwork ? 'block' : 'none';
+    setTimeout(() => { artThumb.src = newArtwork || ''; }, 400);
   }
 
   document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
