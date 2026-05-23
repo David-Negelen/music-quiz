@@ -2324,6 +2324,22 @@ async function init() {
   // Next question
   document.getElementById('next-btn').addEventListener('click', advanceQuiz);
 
+  // Remove current song from quiz (and database)
+  document.getElementById('remove-song-btn').addEventListener('click', async () => {
+    const q = state.quizQuestions[state.quizIndex];
+    if (!q) return;
+    stopAudio();
+    await fetch(`/api/songs/${q.song.id}`, { method: 'DELETE' });
+    state.quizQuestions.splice(state.quizIndex, 1);
+    showToast(`„${q.song.title}" entfernt`);
+    if (state.quizIndex >= state.quizQuestions.length) {
+      await closeSession();
+      showReview();
+    } else {
+      renderQuestion();
+    }
+  });
+
   // End session early
   document.getElementById('end-session-btn').addEventListener('click', async () => {
     stopAudio();
