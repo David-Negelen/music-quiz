@@ -891,16 +891,6 @@ body {
 .play-btn:hover  { background: var(--accent-hover); }
 .play-btn:active { transform: scale(0.93); }
 
-.progress-track {
-  flex: 1;
-  height: 2px;
-  background: var(--surface-3);
-  border-radius: 1px;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.progress-fill { height: 100%; background: var(--accent); border-radius: 1px; width: 0%; transition: width 0.4s linear; }
 
 .timer {
   font-size: 11px;

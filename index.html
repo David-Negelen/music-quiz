@@ -93,9 +93,6 @@
           <button id="play-btn" class="play-btn" title="Abspielen / Pause">
             <span id="play-icon">▶</span>
           </button>
-          <div class="progress-track" id="progress-track">
-            <div id="progress-fill" class="progress-fill"></div>
-          </div>
           <span id="timer-display" class="timer">0:30</span>
           <input type="range" id="volume-slider" class="volume-slider" min="0" max="1" step="0.02" value="1" title="Volume">
         </div>
@@ -281,7 +278,7 @@
     </div>
   </div>
 
-  <audio id="preview-audio" preload="none"></audio>
+  <audio id="preview-audio" preload="none" crossorigin="anonymous"></audio>
   <script src="app.js"></script>
 </body>
 </html>

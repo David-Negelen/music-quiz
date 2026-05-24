@@ -25,65 +25,76 @@ let progressInterval = null;
 let animFrameId = null;
 let currentVolume = 1;
 
+// Web Audio API — created once, reused across songs
+let audioCtx = null;
+let analyserNode = null;
+let mediaSourceConnected = false;
+
+function initWebAudio() {
+  if (audioCtx) return true;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyserNode = audioCtx.createAnalyser();
+    analyserNode.fftSize = 256;            // 128 frequency bins
+    analyserNode.smoothingTimeConstant = 0.8;
+    // Route: audio element → analyser → speakers
+    const src = audioCtx.createMediaElementSource(audio);
+    src.connect(analyserNode);
+    analyserNode.connect(audioCtx.destination);
+    mediaSourceConnected = true;
+    return true;
+  } catch (e) {
+    console.warn('Web Audio init failed:', e);
+    audioCtx = null;
+    analyserNode = null;
+    return false;
+  }
+}
+
 function startVisualizer() {
   if (animFrameId) cancelAnimationFrame(animFrameId);
   const canvas = document.getElementById('visualizer');
   if (!canvas) return;
 
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = (canvas.offsetWidth || 360) * dpr;
+  canvas.width  = (canvas.offsetWidth  || 360) * dpr;
   canvas.height = (canvas.offsetHeight || 160) * dpr;
 
   const ctx2d = canvas.getContext('2d');
-  const N = 64;
-  const freq  = Array.from({ length: N }, () => 0.5 + Math.random() * 0.9);
-  const phase = Array.from({ length: N }, () => Math.random() * Math.PI * 2);
-  let t = 0;
+
+  const hasAnalyser = initWebAudio();
+  if (hasAnalyser && audioCtx.state === 'suspended') audioCtx.resume();
+
+  const bufLen  = hasAnalyser ? analyserNode.frequencyBinCount : 0;
+  const freqData = hasAnalyser ? new Uint8Array(bufLen) : null;
 
   function draw() {
     animFrameId = requestAnimationFrame(draw);
     const W = canvas.width;
     const H = canvas.height;
-    const gap  = 2.5 * dpr;
-    const barW = (W - gap * (N - 1)) / N;
-
     ctx2d.clearRect(0, 0, W, H);
 
-    const isPlaying = !audio.paused;
-    const playhead  = (audio.duration && !isNaN(audio.duration))
-      ? audio.currentTime / audio.duration : 0;
+    if (!freqData) return;
 
-    t += isPlaying ? 0.042 : 0.009;
+    analyserNode.getByteFrequencyData(freqData);
 
-    // Glow when playing
-    ctx2d.shadowBlur  = isPlaying ? 12 * dpr : 0;
-    ctx2d.shadowColor = 'rgba(255, 82, 82, 0.55)';
+    // Draw mirrored frequency bars from centre
+    const N    = bufLen;
+    const gap  = 2 * dpr;
+    const barW = Math.max(1, (W - gap * (N - 1)) / N);
+
+    ctx2d.shadowBlur  = 10 * dpr;
+    ctx2d.shadowColor = 'rgba(255,82,82,0.5)';
 
     for (let i = 0; i < N; i++) {
-      const wave1 = Math.sin(t * freq[i] + phase[i]);
-      const wave2 = Math.sin(t * freq[i] * 0.42 + phase[i] * 1.4);
-      const v = isPlaying
-        ? Math.max(0.05, (wave1 * 0.42 + 0.58) * (wave2 * 0.22 + 0.78))
-        : Math.max(0.018, wave1 * 0.07 + 0.09);
-
-      const halfH  = Math.max(2 * dpr, v * H * 0.46);
-      const isPast = i / N < playhead;
-
-      ctx2d.fillStyle = isPlaying
-        ? (isPast ? 'rgba(255,82,82,0.92)' : 'rgba(255,82,82,0.25)')
-        : 'rgba(255,82,82,0.12)';
-
+      const v     = freqData[i] / 255;           // 0..1
+      const halfH = Math.max(1.5 * dpr, v * H * 0.48);
+      const alpha = 0.18 + v * 0.82;
+      ctx2d.fillStyle = `rgba(255,82,82,${alpha.toFixed(2)})`;
       ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
     }
 
     ctx2d.shadowBlur = 0;
-
-    // Playhead line
-    if (isPlaying && playhead > 0) {
-      const px = playhead * W;
-      ctx2d.fillStyle = 'rgba(255,82,82,0.85)';
-      ctx2d.fillRect(px - dpr, 0, 2 * dpr, H);
-    }
   }
 
   draw();
@@ -434,7 +445,6 @@ function startAudio(url) {
 
   const playBtn     = document.getElementById('play-btn');
   const playIcon    = document.getElementById('play-icon');
-  const progressFill = document.getElementById('progress-fill');
   const timerDisplay = document.getElementById('timer-display');
   const arc          = document.getElementById('timer-ring-arc');
   const circumference = 2 * Math.PI * 19;
@@ -449,8 +459,6 @@ function startAudio(url) {
     if (!audio.duration) return;
     const pct  = audio.currentTime / audio.duration;
     const left = 1 - pct;
-
-    progressFill.style.width = `${pct * 100}%`;
 
     // Countdown bar — shrinks as song progresses, changes color for tension
     if (cdFill) {
@@ -480,7 +488,6 @@ function startAudio(url) {
   audio.onpause = () => { if (playIcon) playIcon.textContent = '▶'; };
   audio.onended = () => {
     if (playIcon) playIcon.textContent = '▶';
-    progressFill.style.width = '100%';
     timerDisplay.textContent = '0:00';
     if (arc)    { arc.style.strokeDashoffset = String(circumference); arc.style.stroke = 'var(--error)'; }
     if (cdFill) { cdFill.style.width = '0%'; cdFill.style.background = 'var(--error)'; }
