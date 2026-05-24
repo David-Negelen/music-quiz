@@ -1084,19 +1084,6 @@ body {
 
 .next-btn { border-radius: 99px !important; letter-spacing: 0.2px; }
 
-.btn-remove-song {
-  background: none;
-  border: none;
-  color: var(--text-3);
-  font-size: 11px;
-  padding: 4px 0;
-  cursor: pointer;
-  text-align: center;
-  opacity: 0.5;
-  transition: opacity 0.15s ease, color 0.15s ease;
-}
-.btn-remove-song:hover { opacity: 1; color: var(--error, #e05c5c); }
-
 /* Streak badge */
 .quiz-streak-badge {
   background: var(--surface-3);
