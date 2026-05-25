@@ -116,9 +116,6 @@ body {
 .view.active { display: block; animation: fadeIn 0.18s ease; }
 #view-quiz-setup.active { display: flex; flex-direction: column; }
 
-#view-library, #view-stats, #view-quiz-active, #view-results {
-  max-width: 640px;
-}
 
 /* ── Buttons ────────────────────────────────────────────────────────────────── */
 
