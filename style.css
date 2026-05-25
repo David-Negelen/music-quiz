@@ -1074,15 +1074,16 @@ body {
 .remove-song-link {
   background: none;
   border: none;
-  color: var(--text-3);
+  color: var(--accent);
   font-family: var(--font-ui);
   font-size: 12px;
   cursor: pointer;
   padding: 0;
+  margin-left: auto;
   transition: color 0.15s ease;
 }
 
-.remove-song-link:hover { color: var(--error); }
+.remove-song-link:hover { color: var(--accent-hover); }
 
 .remove-song-confirm {
   display: inline-flex;
