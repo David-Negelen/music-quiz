@@ -1073,17 +1073,20 @@ body {
 
 .remove-song-link {
   background: none;
-  border: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
   color: var(--accent);
   font-family: var(--font-ui);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  padding: 0;
+  padding: 4px 10px;
   margin-left: auto;
-  transition: color 0.15s ease;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.remove-song-link:hover { color: var(--accent-hover); }
+.remove-song-link:hover { background: rgba(110,142,240,0.1); }
 
 .remove-song-confirm {
   display: inline-flex;
@@ -1091,6 +1094,8 @@ body {
   gap: 8px;
   font-size: 12px;
   color: var(--text-2);
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .remove-song-yes,
