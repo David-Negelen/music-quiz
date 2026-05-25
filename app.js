@@ -437,7 +437,7 @@ function stopAudio() {
   if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
 }
 
-function startAudio(url) {
+async function startAudio(url) {
   stopAudio();
   audio.src = url ? `/api/audio-proxy?url=${encodeURIComponent(url)}` : '';
   audio.load();
@@ -498,12 +498,16 @@ function startAudio(url) {
     if (playIcon) playIcon.textContent = '▶';
   };
 
-  playBtn.onclick = () => {
+  playBtn.onclick = async () => {
     if (!audio.paused) { audio.pause(); return; }
+    if (audioCtx?.state === 'suspended') await audioCtx.resume();
     audio.play().catch(() => { showToast('Wiedergabe fehlgeschlagen.'); });
   };
 
   startVisualizer();
+  // On HTTP non-localhost origins the AudioContext starts suspended; await
+  // resume before play so the captured audio element actually produces sound.
+  if (audioCtx?.state === 'suspended') await audioCtx.resume();
   audio.play().catch(() => { if (playIcon) playIcon.textContent = '▶'; });
 }
 
