@@ -1071,6 +1071,54 @@ body {
 
 .next-btn { border-radius: 99px !important; letter-spacing: 0.2px; }
 
+.remove-song-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  min-height: 24px;
+}
+
+.remove-song-link {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.remove-song-link:hover { color: var(--error); }
+
+.remove-song-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.remove-song-yes,
+.remove-song-no {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.remove-song-yes { color: var(--error); border-color: var(--error); }
+.remove-song-yes:hover { background: rgba(212,85,85,0.1); }
+.remove-song-no  { color: var(--text-3); }
+.remove-song-no:hover  { color: var(--text-2); border-color: var(--border-2); }
+
 /* Streak badge */
 .quiz-streak-badge {
   background: var(--surface-3);

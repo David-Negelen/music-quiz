@@ -82,7 +82,6 @@
         </div>
         <span id="quiz-score" class="quiz-score-display">0 pts</span>
         <span id="quiz-streak" class="quiz-streak-badge" style="display:none"></span>
-        <button id="remove-song-btn" class="btn-ghost btn-sm end-session-btn" title="Song aus Quiz entfernen">✕ Song</button>
         <button id="end-session-btn" class="btn-ghost btn-sm end-session-btn" title="Session beenden">Ende</button>
       </div>
 
@@ -131,6 +130,15 @@
           <button id="submit-answer-btn" class="btn-primary btn-lg">Prüfen</button>
           <button id="next-btn" class="btn-primary btn-lg next-btn" style="display:none">Weiter →</button>
         </div>
+      </div>
+
+      <div id="remove-song-row" class="remove-song-row">
+        <button id="remove-song-btn" class="remove-song-link">Song aus Bibliothek löschen</button>
+        <span id="remove-song-confirm" class="remove-song-confirm" style="display:none">
+          Wirklich löschen?
+          <button id="remove-song-yes" class="remove-song-yes">Ja</button>
+          <button id="remove-song-no" class="remove-song-no">Nein</button>
+        </span>
       </div>
     </section>
 

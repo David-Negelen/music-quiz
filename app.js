@@ -1101,6 +1101,9 @@ function renderQuestion() {
     setTimeout(() => { artThumb.src = newArtwork || ''; }, 400);
   }
 
+  document.getElementById('remove-song-confirm').style.display = 'none';
+  document.getElementById('remove-song-btn').style.display = '';
+
   document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
   const progressFillEl = document.getElementById('quiz-progress-fill');
   if (progressFillEl) progressFillEl.style.width = `${((state.quizIndex + 1) / total) * 100}%`;
@@ -2330,8 +2333,18 @@ async function init() {
   // Next question
   document.getElementById('next-btn').addEventListener('click', advanceQuiz);
 
-  // Remove current song from quiz (and database)
-  document.getElementById('remove-song-btn').addEventListener('click', async () => {
+  // Remove current song — show confirmation first
+  document.getElementById('remove-song-btn').addEventListener('click', () => {
+    document.getElementById('remove-song-btn').style.display = 'none';
+    document.getElementById('remove-song-confirm').style.display = 'inline-flex';
+  });
+
+  document.getElementById('remove-song-no').addEventListener('click', () => {
+    document.getElementById('remove-song-confirm').style.display = 'none';
+    document.getElementById('remove-song-btn').style.display = '';
+  });
+
+  document.getElementById('remove-song-yes').addEventListener('click', async () => {
     const q = state.quizQuestions[state.quizIndex];
     if (!q) return;
     stopAudio();
