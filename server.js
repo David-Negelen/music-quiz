@@ -1,8 +1,9 @@
 'use strict';
 
-const http = require('http');
-const fs   = require('fs');
-const path = require('path');
+const http  = require('http');
+const https = require('https');
+const fs    = require('fs');
+const path  = require('path');
 const Database = require('better-sqlite3');
 
 // Load .env if present
@@ -586,6 +587,31 @@ async function handleApi(req, res) {
     const stats = handleGetStats(res);
     // Note: handleGetStats calls json directly, so we return early
     return;
+  }
+
+  if (resource === 'audio-proxy' && method === 'GET') {
+    const qs  = new URLSearchParams(req.url.split('?')[1] || '');
+    const url = qs.get('url') || '';
+    if (!/^https?:\/\/[a-z0-9.-]*(apple\.com|mzstatic\.com)\//i.test(url)) {
+      return json(res, 400, { error: 'Invalid URL' });
+    }
+    return new Promise((resolve) => {
+      const mod = url.startsWith('https') ? https : http;
+      mod.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, upstream => {
+        res.writeHead(upstream.statusCode, {
+          'Content-Type': upstream.headers['content-type'] || 'audio/mpeg',
+          'Accept-Ranges': 'bytes',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=3600',
+        });
+        upstream.pipe(res);
+        upstream.on('end', resolve);
+        upstream.on('error', resolve);
+      }).on('error', () => {
+        if (!res.headersSent) json(res, 502, { error: 'Upstream failed' });
+        resolve();
+      });
+    });
   }
 
   if (resource === 'songs') {

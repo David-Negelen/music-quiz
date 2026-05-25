@@ -439,7 +439,7 @@ function stopAudio() {
 
 function startAudio(url) {
   stopAudio();
-  audio.src = url;
+  audio.src = url ? `/api/audio-proxy?url=${encodeURIComponent(url)}` : '';
   audio.load();
   audio.volume = currentVolume;
 
@@ -494,9 +494,13 @@ function startAudio(url) {
     if (cdFill) { cdFill.style.width = '0%'; cdFill.style.background = 'var(--error)'; }
   };
 
+  audio.onerror = () => {
+    if (playIcon) playIcon.textContent = '▶';
+  };
+
   playBtn.onclick = () => {
     if (!audio.paused) { audio.pause(); return; }
-    audio.play().catch(() => {});
+    audio.play().catch(() => { showToast('Wiedergabe fehlgeschlagen.'); });
   };
 
   startVisualizer();
@@ -974,7 +978,7 @@ function renderGenreGrid() {
         <div class="genre-card-main">
           <div class="genre-card-text">
             <span class="genre-card-name">${esc(label)}</span>
-            <div class="genre-card-count">${st.total} songs</div>
+            <div class="genre-card-count">${st.total} Titel</div>
             ${miniBar}
           </div>
           <button class="genre-card-practice-btn btn-primary" data-genre="${esc(g)}">Üben</button>
@@ -1249,7 +1253,7 @@ async function advanceQuiz() {
     applySmTwo(q.song, ans.correct);
 
     if (state.currentSessionId) {
-      fetch(`/api/sessions/${state.currentSessionId}/results`, {
+      await fetch(`/api/sessions/${state.currentSessionId}/results`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1579,7 +1583,7 @@ async function toggleHistorySession(el) {
   try {
     const res     = await fetch(`/api/sessions/${el.dataset.id}/results`);
     const results = await res.json();
-    if (!results.length) { detail.innerHTML = '<p class="hint" style="padding:8px 14px">No results.</p>'; return; }
+    if (!results.length) { detail.innerHTML = '<p class="hint" style="padding:8px 14px">Keine Ergebnisse.</p>'; return; }
     detail.innerHTML = results.map(r => `
       <div class="review-song-row">
         <img src="${esc(r.artwork_url || '')}" alt="" width="32" height="32" loading="lazy" onerror="this.style.visibility='hidden'">
@@ -1594,7 +1598,7 @@ async function toggleHistorySession(el) {
         </span>
       </div>`).join('');
   } catch {
-    detail.innerHTML = '<p class="hint" style="padding:8px 14px">Failed to load.</p>';
+    detail.innerHTML = '<p class="hint" style="padding:8px 14px">Fehler beim Laden.</p>';
   }
 }
 
@@ -1949,10 +1953,10 @@ function openModal(startTab) {
   const modal = document.getElementById('import-modal');
   modal.style.display = 'flex';
   document.getElementById('paste-input').value = '';
-  document.getElementById('file-label').textContent = 'Choose file or drag & drop';
+  document.getElementById('file-label').textContent = 'Datei wählen oder ablegen';
   document.getElementById('import-progress').style.display = 'none';
   document.getElementById('import-result').style.display = 'none';
-  document.getElementById('import-run-btn').textContent = 'Import';
+  document.getElementById('import-run-btn').textContent = 'Importieren';
   document.getElementById('import-run-btn').onclick = handleImportRun;
   document.getElementById('import-cancel-btn').disabled = false;
   switchImportTab(startTab || 'paste');
@@ -2136,11 +2140,11 @@ async function init() {
     const sortPills = document.createElement('div');
     sortPills.className = 'sort-pills';
     const sortOpts = [
-      { value: 'title',     label: 'Title' },
-      { value: 'artist',    label: 'Artist' },
-      { value: 'year',      label: 'Year' },
-      { value: 'knowledge', label: 'Weakest' },
-      { value: 'added',     label: 'Added' },
+      { value: 'title',     label: 'Titel' },
+      { value: 'artist',    label: 'Interpret' },
+      { value: 'year',      label: 'Jahr' },
+      { value: 'knowledge', label: 'Schwächste' },
+      { value: 'added',     label: 'Hinzugefügt' },
     ];
     sortOpts.forEach(opt => {
       const pill = document.createElement('button');
@@ -2168,14 +2172,14 @@ async function init() {
     toggleBtn.id = 'lib-view-toggle';
     const savedView = localStorage.getItem('muzquiz_libview') || 'list';
     toggleBtn.innerHTML = savedView === 'card' ? listIcon : gridIcon;
-    toggleBtn.title = savedView === 'card' ? 'Switch to list' : 'Switch to grid';
+    toggleBtn.title = savedView === 'card' ? 'Zur Listenansicht' : 'Zur Kachelansicht';
     libActions.insertBefore(toggleBtn, libActions.firstChild);
     toggleBtn.addEventListener('click', () => {
       const cur = localStorage.getItem('muzquiz_libview') || 'list';
       const next = cur === 'list' ? 'card' : 'list';
       localStorage.setItem('muzquiz_libview', next);
       toggleBtn.innerHTML = next === 'card' ? listIcon : gridIcon;
-      toggleBtn.title = next === 'card' ? 'Switch to list' : 'Switch to grid';
+      toggleBtn.title = next === 'card' ? 'Zur Listenansicht' : 'Zur Kachelansicht';
       renderLibrary();
     });
   }
