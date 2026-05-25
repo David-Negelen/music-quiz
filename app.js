@@ -259,7 +259,7 @@ async function addToLibrary(song) {
   document.querySelectorAll(`.add-btn[data-id="${song.id}"]`).forEach(btn => {
     btn.classList.add('added');
     btn.disabled = true;
-    btn.title = 'Added';
+    btn.title = 'Hinzugefügt';
   });
   try {
     await fetch('/api/songs', {
@@ -440,6 +440,7 @@ function stopAudio() {
 function startAudio(url) {
   stopAudio();
   audio.src = url;
+  audio.load();
   audio.volume = currentVolume;
 
   const playBtn     = document.getElementById('play-btn');
@@ -482,6 +483,7 @@ function startAudio(url) {
   }
 
   progressInterval = setInterval(updateProgress, 250);
+  audio.onloadedmetadata = () => updateProgress();
 
   audio.onplay  = () => { if (playIcon) playIcon.textContent = '⏸'; };
   audio.onpause = () => { if (playIcon) playIcon.textContent = '▶'; };
@@ -525,7 +527,7 @@ function showView(name) {
 function renderSearchResults(songs) {
   const container = document.getElementById('search-results');
   if (!songs.length) {
-    container.innerHTML = '<p class="hint" style="padding:8px 0">No results found.</p>';
+    container.innerHTML = '<p class="hint" style="padding:8px 0">Keine Ergebnisse gefunden.</p>';
     return;
   }
   container.innerHTML = songs.map(song => {
@@ -1415,7 +1417,7 @@ async function renderStats() {
 
   document.getElementById('stats-overview').innerHTML = `
     <div class="stat-chip"><span class="stat-num">${data.totalSongs}</span><span class="stat-label">Songs</span></div>
-    <div class="stat-chip"><span class="stat-num">${data.sessionsPlayed}</span><span class="stat-label">Sessions</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.sessionsPlayed}</span><span class="stat-label">Einheiten</span></div>
     <div class="stat-chip"><span class="stat-num">${data.uniqueReviewed}</span><span class="stat-label">Gelernt</span></div>
     <div class="stat-chip"><span class="stat-num">${data.avgSessionSize}</span><span class="stat-label">Ø Größe</span></div>
   `;
@@ -1429,7 +1431,7 @@ async function renderStats() {
       <span class="knowledge-bar-label">${{title:'Titel',artist:'Künstler',year:'Jahr'}[t]}</span>
       <div class="knowledge-bar-track"><div class="knowledge-bar-fill knowledge-bar-fill--${t}" style="width:${pct}%"></div></div>
       <span class="knowledge-bar-pct">${pct}%</span>
-      <span class="knowledge-bar-sub">${known} of ${kn.total}</span>
+      <span class="knowledge-bar-sub">${known} von ${kn.total}</span>
     </div>`;
   }).join('');
 
@@ -2015,8 +2017,8 @@ function handleImportRun() {
 async function startSession() {
   const setupError = document.getElementById('setup-error');
 
-  if (state.library.length < 2) {
-    setupError.textContent = 'Zuerst mindestens 2 Songs zur Bibliothek hinzufügen.';
+  if (state.library.length < 4) {
+    setupError.textContent = 'Zuerst mindestens 4 Songs zur Bibliothek hinzufügen.';
     setupError.style.display = 'block';
     return;
   }
@@ -2029,7 +2031,7 @@ async function startSession() {
   state.quizQuestions = await buildStudySession();
   
   if (!state.quizQuestions) {
-    setupError.textContent = genres
+    setupError.textContent = state.quizConfig?.genres
       ? 'Keine Songs für die ausgewählten Genres.'
       : 'Keine Songs in der Warteschlange. Bibliothek zu klein?';
     setupError.style.display = 'block';

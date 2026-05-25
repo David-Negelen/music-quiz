@@ -654,3 +654,11 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Musik Quiz → http://localhost:${PORT}`);
 });
+
+server.on('error', err => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} already in use. Stop the existing process first.`);
+    process.exit(1);
+  }
+  throw err;
+});

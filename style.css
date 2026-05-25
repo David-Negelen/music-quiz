@@ -214,7 +214,7 @@ body {
 }
 
 .search-bar input::placeholder { color: var(--text-3); }
-.search-bar input:focus { border-color: var(--border-2); }
+.search-bar input:focus { border-color: var(--accent); outline: 2px solid rgba(110,142,240,0.25); outline-offset: 2px; }
 
 .loading-msg, .error-msg { font-size: 13px; padding: 8px 0; color: var(--text-2); }
 .error-msg { color: var(--error); }
@@ -259,8 +259,8 @@ body {
   background: var(--surface-3);
   border: none;
   color: var(--text-3);
-  width: 26px;
-  height: 26px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   font-size: 15px;
   cursor: pointer;
@@ -396,11 +396,12 @@ body {
   border-radius: 4px;
   flex-shrink: 0;
   line-height: 1;
-  opacity: 0;
-  transition: color 0.15s ease;
+  opacity: 0.25;
+  transition: color 0.15s ease, opacity 0.15s ease;
 }
 
 .song-row:hover .remove-btn { opacity: 1; }
+@media (hover: none) { .remove-btn { opacity: 0.5; } }
 .remove-btn:hover { color: var(--error); }
 
 /* Library — card grid view */
