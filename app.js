@@ -78,7 +78,6 @@ function startVisualizer() {
 
     analyserNode.getByteFrequencyData(freqData);
 
-    // Draw mirrored frequency bars from centre
     const N    = bufLen;
     const gap  = 2 * dpr;
     const barW = Math.max(1, (W - gap * (N - 1)) / N);
