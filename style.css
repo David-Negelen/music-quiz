@@ -1071,15 +1071,6 @@ body {
 
 .next-btn { border-radius: 99px !important; letter-spacing: 0.2px; }
 
-.remove-song-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 12px;
-  min-height: 24px;
-}
-
 .remove-song-link {
   background: none;
   border: none;
