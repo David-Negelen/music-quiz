@@ -504,6 +504,11 @@ function startAudio(url) {
 // ── Views ─────────────────────────────────────────────────────────────────
 
 function showView(name) {
+  const leavingQuiz = document.getElementById('view-quiz-active').classList.contains('active');
+  if (leavingQuiz && !name.startsWith('quiz') && state.currentSessionId) {
+    closeSession();
+    state.currentSessionId = null;
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${name}`).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => {
@@ -2376,6 +2381,24 @@ async function init() {
   // Stats history — load more
   document.getElementById('stats-load-more').addEventListener('click', () => {
     loadSessionHistory(true);
+  });
+
+  // Autosave session on page close / refresh
+  window.addEventListener('pagehide', () => {
+    if (!state.currentSessionId) return;
+    const answers = state.quizAnswers;
+    fetch(`/api/sessions/${state.currentSessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        ended_at:       new Date().toISOString(),
+        song_count:     answers.length,
+        correct_title:  answers.filter(a => a.correct.title).length,
+        correct_artist: answers.filter(a => a.correct.artist).length,
+        correct_year:   answers.filter(a => a.correct.year).length,
+      }),
+    });
   });
 
   // Restore tab from URL hash on load / browser back-forward
