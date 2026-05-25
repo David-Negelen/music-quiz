@@ -596,21 +596,30 @@ async function handleApi(req, res) {
       return json(res, 400, { error: 'Invalid URL' });
     }
     return new Promise((resolve) => {
-      const mod = url.startsWith('https') ? https : http;
-      mod.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, upstream => {
-        res.writeHead(upstream.statusCode, {
-          'Content-Type': upstream.headers['content-type'] || 'audio/mpeg',
-          'Accept-Ranges': 'bytes',
-          'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'public, max-age=3600',
+      function fetch(target, hops) {
+        if (hops > 5) { if (!res.headersSent) json(res, 502, { error: 'Too many redirects' }); return resolve(); }
+        const mod = target.startsWith('https') ? https : http;
+        mod.get(target, { headers: { 'User-Agent': 'Mozilla/5.0' } }, upstream => {
+          const { statusCode, headers: h } = upstream;
+          if ([301, 302, 303, 307, 308].includes(statusCode) && h.location) {
+            upstream.resume();
+            return fetch(h.location, hops + 1);
+          }
+          res.writeHead(statusCode, {
+            'Content-Type': h['content-type'] || 'audio/mpeg',
+            'Accept-Ranges': 'bytes',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'public, max-age=3600',
+          });
+          upstream.pipe(res);
+          upstream.on('end', resolve);
+          upstream.on('error', resolve);
+        }).on('error', () => {
+          if (!res.headersSent) json(res, 502, { error: 'Upstream failed' });
+          resolve();
         });
-        upstream.pipe(res);
-        upstream.on('end', resolve);
-        upstream.on('error', resolve);
-      }).on('error', () => {
-        if (!res.headersSent) json(res, 502, { error: 'Upstream failed' });
-        resolve();
-      });
+      }
+      fetch(url, 0);
     });
   }
 
