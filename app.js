@@ -439,7 +439,7 @@ function stopAudio() {
 
 async function startAudio(url) {
   stopAudio();
-  audio.src = url ? `/api/audio-proxy?url=${encodeURIComponent(url)}` : '';
+  audio.src = url || '';
   audio.load();
   audio.volume = currentVolume;
 
