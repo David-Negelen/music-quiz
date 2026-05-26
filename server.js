@@ -195,6 +195,7 @@ const SCORE_FIELDS = new Set([
   'score_title',   'score_artist',   'score_year',
   'attempts_title','attempts_artist','attempts_year',
   'genre', 'preview_url', 'artwork_url', 'preview_country',
+  'title', 'artist', 'year',
 ]);
 
 const SR_FIELDS = new Set([

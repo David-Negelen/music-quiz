@@ -1119,6 +1119,105 @@ body {
 .remove-song-no  { color: var(--text-3); }
 .remove-song-no:hover  { color: var(--text-2); border-color: var(--border-2); }
 
+/* Edit / Replace song buttons */
+.song-action-btn {
+  background: none;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  color: var(--text-3);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 3px 8px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  line-height: 1.4;
+}
+.song-action-btn:hover { color: var(--text); border-color: var(--text-3); background: var(--surface-3); }
+
+/* Edit song panel */
+.song-edit-panel {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px 14px;
+  background: var(--surface-2);
+}
+.song-edit-fields { display: flex; flex-direction: column; gap: 8px; }
+.song-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.song-edit-row label {
+  width: 58px;
+  font-size: 12px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.song-edit-input {
+  flex: 1;
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 5px 9px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.song-edit-input:focus { border-color: var(--accent); }
+.song-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+/* Replace song panel */
+.song-replace-panel {
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.replace-results-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.replace-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--border);
+}
+.replace-result:last-child { border-bottom: none; }
+.replace-result:hover { background: var(--surface-3); }
+.replace-result-art {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-3);
+}
+.replace-result-info { flex: 1; min-width: 0; }
+.replace-result-title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.replace-result-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.replace-loading {
+  font-size: 13px;
+  color: var(--text-3);
+  padding: 14px 16px;
+  text-align: center;
+}
+
 /* Streak badge */
 .quiz-streak-badge {
   background: var(--surface-3);

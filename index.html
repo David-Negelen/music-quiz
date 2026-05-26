@@ -100,6 +100,33 @@
             <button id="remove-song-yes" class="remove-song-yes">Ja</button>
             <button id="remove-song-no" class="remove-song-no">Nein</button>
           </span>
+          <button id="edit-song-btn" class="song-action-btn" style="display:none" title="Felder bearbeiten">✏</button>
+          <button id="replace-song-btn" class="song-action-btn" style="display:none" title="Anderen Preview wählen">⇄</button>
+        </div>
+
+        <div id="edit-song-panel" class="song-edit-panel" style="display:none">
+          <div class="song-edit-fields">
+            <div class="song-edit-row">
+              <label>Titel</label>
+              <input id="edit-title-input" type="text" class="song-edit-input" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="song-edit-row">
+              <label>Künstler</label>
+              <input id="edit-artist-input" type="text" class="song-edit-input" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="song-edit-row">
+              <label>Jahr</label>
+              <input id="edit-year-input" type="text" class="song-edit-input" autocomplete="off" spellcheck="false" maxlength="4">
+            </div>
+          </div>
+          <div class="song-edit-actions">
+            <button id="edit-cancel-btn" class="btn-ghost btn-sm">Abbrechen</button>
+            <button id="edit-save-btn" class="btn-primary btn-sm">Speichern</button>
+          </div>
+        </div>
+
+        <div id="replace-song-panel" class="song-replace-panel" style="display:none">
+          <div id="replace-results-list" class="replace-results-list"></div>
         </div>
 
         <div class="answer-fields">

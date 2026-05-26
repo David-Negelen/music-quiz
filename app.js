@@ -1117,6 +1117,10 @@ function renderQuestion() {
 
   document.getElementById('remove-song-confirm').style.display = 'none';
   document.getElementById('remove-song-btn').style.display = '';
+  document.getElementById('edit-song-btn').style.display = 'none';
+  document.getElementById('replace-song-btn').style.display = 'none';
+  document.getElementById('edit-song-panel').style.display = 'none';
+  document.getElementById('replace-song-panel').style.display = 'none';
 
   document.getElementById('quiz-progress').textContent = `${state.quizIndex + 1} / ${total}`;
   const progressFillEl = document.getElementById('quiz-progress-fill');
@@ -1245,6 +1249,8 @@ function handleAnswer() {
 
   document.getElementById('submit-answer-btn').style.display = 'none';
   document.getElementById('next-btn').style.display = 'block';
+  document.getElementById('edit-song-btn').style.display = '';
+  document.getElementById('replace-song-btn').style.display = '';
 }
 
 async function advanceQuiz() {
@@ -2378,6 +2384,122 @@ async function init() {
       showReview();
     } else {
       renderQuestion();
+    }
+  });
+
+  // Edit song fields
+  document.getElementById('edit-song-btn').addEventListener('click', () => {
+    const panel = document.getElementById('edit-song-panel');
+    document.getElementById('replace-song-panel').style.display = 'none';
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    const q = state.quizQuestions[state.quizIndex];
+    if (!q) return;
+    document.getElementById('edit-title-input').value = q.song.title || '';
+    document.getElementById('edit-artist-input').value = q.song.artist || '';
+    document.getElementById('edit-year-input').value = q.song.year || '';
+    panel.style.display = '';
+    document.getElementById('edit-title-input').focus();
+  });
+
+  document.getElementById('edit-cancel-btn').addEventListener('click', () => {
+    document.getElementById('edit-song-panel').style.display = 'none';
+  });
+
+  document.getElementById('edit-save-btn').addEventListener('click', async () => {
+    const q = state.quizQuestions[state.quizIndex];
+    if (!q) return;
+    const newTitle  = document.getElementById('edit-title-input').value.trim();
+    const newArtist = document.getElementById('edit-artist-input').value.trim();
+    const newYear   = document.getElementById('edit-year-input').value.trim();
+    await fetch(`/api/songs/${q.song.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle, artist: newArtist, year: newYear }),
+    }).catch(() => {});
+    if (newTitle)  q.song.title  = newTitle;
+    if (newArtist) q.song.artist = newArtist;
+    if (newYear)   q.song.year   = newYear;
+    const libSong = state.library.find(s => s.id === q.song.id);
+    if (libSong) {
+      if (newTitle)  libSong.title  = newTitle;
+      if (newArtist) libSong.artist = newArtist;
+      if (newYear)   libSong.year   = newYear;
+    }
+    const lastAns = state.quizAnswers[state.quizAnswers.length - 1];
+    if (lastAns) {
+      for (const type of ['title', 'artist', 'year']) {
+        if (!lastAns.correct[type]) {
+          const hintEl = document.getElementById(`hint-${type}`);
+          if (hintEl && hintEl.classList.contains('visible')) hintEl.textContent = q.song[type];
+        }
+      }
+    }
+    document.getElementById('edit-song-panel').style.display = 'none';
+    showToast('Gespeichert');
+  });
+
+  // Replace song preview from Apple Music
+  document.getElementById('replace-song-btn').addEventListener('click', async () => {
+    const panel = document.getElementById('replace-song-panel');
+    document.getElementById('edit-song-panel').style.display = 'none';
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    const q = state.quizQuestions[state.quizIndex];
+    if (!q) return;
+    const listEl = document.getElementById('replace-results-list');
+    listEl.innerHTML = '<div class="replace-loading">Suche läuft…</div>';
+    panel.style.display = '';
+    let results;
+    try { results = await searchSongs(`${q.song.artist} ${q.song.title}`); }
+    catch { listEl.innerHTML = '<div class="replace-loading">Suche fehlgeschlagen.</div>'; return; }
+    if (!results || !results.length) {
+      listEl.innerHTML = '<div class="replace-loading">Keine Ergebnisse.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const r of results.slice(0, 12)) {
+      const el = document.createElement('div');
+      el.className = 'replace-result';
+      const isCurrent = r.previewUrl === q.song.previewUrl;
+      el.innerHTML = `
+        <img class="replace-result-art" src="${r.artwork || ''}" alt="" loading="lazy">
+        <div class="replace-result-info">
+          <div class="replace-result-title">${r.title}${isCurrent ? ' ✓' : ''}</div>
+          <div class="replace-result-sub">${r.artist} · ${r.year}</div>
+        </div>
+      `;
+      el.addEventListener('click', async () => {
+        await fetch(`/api/songs/${q.song.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preview_url: r.previewUrl, artwork_url: r.artwork, title: r.title, artist: r.artist, year: r.year }),
+        }).catch(() => {});
+        q.song.previewUrl = r.previewUrl;
+        q.song.artwork    = r.artwork;
+        q.song.title      = r.title;
+        q.song.artist     = r.artist;
+        q.song.year       = r.year;
+        const libSong = state.library.find(s => s.id === q.song.id);
+        if (libSong) {
+          libSong.previewUrl = r.previewUrl;
+          libSong.artwork    = r.artwork;
+          libSong.title      = r.title;
+          libSong.artist     = r.artist;
+          libSong.year       = r.year;
+        }
+        const lastAns = state.quizAnswers[state.quizAnswers.length - 1];
+        if (lastAns) {
+          for (const type of ['title', 'artist', 'year']) {
+            if (!lastAns.correct[type]) {
+              const hintEl = document.getElementById(`hint-${type}`);
+              if (hintEl && hintEl.classList.contains('visible')) hintEl.textContent = q.song[type];
+            }
+          }
+        }
+        panel.style.display = 'none';
+        startAudio(r.previewUrl);
+        showToast('Song ersetzt');
+      });
+      listEl.appendChild(el);
     }
   });
 
