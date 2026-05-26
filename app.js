@@ -116,7 +116,7 @@ function startVisualizer() {
 
       // Frequency-dependent decay: bass drops faster, treble holds longer to avoid flicker
       const t2    = i / N_BARS;
-      const decay = 0.14 - t2 * 0.10;   // 0.14 at bass → 0.04 at treble
+      const decay = 0.22 - t2 * 0.14;   // 0.22 at bass → 0.08 at treble
       if (target > barAmps[i]) barAmps[i] += (target - barAmps[i]) * 0.5;
       else barAmps[i] = Math.max(0, barAmps[i] - decay);
 
