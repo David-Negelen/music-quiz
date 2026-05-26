@@ -35,9 +35,8 @@ function initWebAudio() {
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyserNode = audioCtx.createAnalyser();
-    analyserNode.fftSize = 2048;           // 1024 bins → fine frequency resolution for log mapping
-    analyserNode.smoothingTimeConstant = 0.8;
-    // Route: audio element → analyser → speakers
+    analyserNode.fftSize = 2048;
+    analyserNode.smoothingTimeConstant = 0.6;
     const src = audioCtx.createMediaElementSource(audio);
     src.connect(analyserNode);
     analyserNode.connect(audioCtx.destination);
@@ -57,13 +56,22 @@ function startVisualizer() {
   if (!canvas) return;
 
   const dpr = window.devicePixelRatio || 1;
-  canvas.width  = (canvas.offsetWidth  || 360) * dpr;
-  canvas.height = (canvas.offsetHeight || 160) * dpr;
+
+  function resizeCanvas() {
+    canvas.width  = (canvas.offsetWidth  || 360) * dpr;
+    canvas.height = (canvas.offsetHeight || 160) * dpr;
+  }
+  resizeCanvas();
+  if (canvas._vizRO) canvas._vizRO.disconnect();
+  const ro = new ResizeObserver(resizeCanvas);
+  ro.observe(canvas);
+  canvas._vizRO = ro;
 
   const ctx2d = canvas.getContext('2d');
-  // Web Audio is initialised lazily on first user gesture in playBtn.onclick,
-  // so check analyserNode each frame rather than capturing it once here.
   let freqData = null;
+
+  const N_BARS  = 140;
+  const barAmps = new Float32Array(N_BARS);
 
   function draw() {
     animFrameId = requestAnimationFrame(draw);
@@ -76,30 +84,44 @@ function startVisualizer() {
 
     analyserNode.getByteFrequencyData(freqData);
 
-    const N_BARS   = 140;
-    const gap      = 1.5 * dpr;
-    const barW     = Math.max(1, (W - gap * (N_BARS - 1)) / N_BARS);
-    const bins     = analyserNode.frequencyBinCount;            // 1024
-    const nyquist  = audioCtx.sampleRate / 2;
-    const minFreq  = 60;
-    const maxFreq  = 16000;
+    const gap     = 1.5 * dpr;
+    const barW    = Math.max(1, (W - gap * (N_BARS - 1)) / N_BARS);
+    const bins    = analyserNode.frequencyBinCount;
+    const nyquist = audioCtx.sampleRate / 2;
+    const minFreq = 20;
+    const maxFreq = Math.min(20000, nyquist);
 
     ctx2d.shadowBlur  = 10 * dpr;
     ctx2d.shadowColor = 'rgba(255,82,82,0.5)';
 
     for (let i = 0; i < N_BARS; i++) {
-      // map bar index to a log-spaced frequency range
       const fLow  = minFreq * Math.pow(maxFreq / minFreq,  i      / N_BARS);
       const fHigh = minFreq * Math.pow(maxFreq / minFreq, (i + 1) / N_BARS);
-      const bLow  = Math.max(0,        Math.round(fLow  / nyquist * bins));
-      const bHigh = Math.min(bins - 1, Math.round(fHigh / nyquist * bins));
+      const bLow  = Math.max(0,        Math.floor(fLow  / nyquist * bins));
+      const bHigh = Math.min(bins - 1, Math.ceil(fHigh  / nyquist * bins));
 
-      // average all FFT bins that fall in this bar's frequency range
-      let sum = 0, count = 0;
-      for (let b = bLow; b <= bHigh; b++) { sum += freqData[b]; count++; }
-      const v = count > 0 ? sum / count / 255 : 0;
+      let raw;
+      if (bHigh > bLow) {
+        let sum = 0;
+        for (let b = bLow; b <= bHigh; b++) sum += freqData[b];
+        raw = sum / (bHigh - bLow + 1) / 255;
+      } else {
+        const fCenter = Math.sqrt(fLow * fHigh);
+        const bExact  = fCenter / nyquist * bins;
+        const b0 = Math.min(bins - 2, Math.floor(bExact));
+        const t  = bExact - b0;
+        raw = (freqData[b0] * (1 - t) + freqData[b0 + 1] * t) / 255;
+      }
+      const target = Math.pow(raw, 0.6);
 
-      const halfH = Math.max(1.5 * dpr, v * H * 0.48);
+      // Frequency-dependent decay: bass drops faster, treble holds longer to avoid flicker
+      const t2    = i / N_BARS;
+      const decay = 0.14 - t2 * 0.10;   // 0.14 at bass → 0.04 at treble
+      if (target > barAmps[i]) barAmps[i] += (target - barAmps[i]) * 0.5;
+      else barAmps[i] = Math.max(0, barAmps[i] - decay);
+
+      const v     = barAmps[i];
+      const halfH = Math.max(1.5 * dpr, v * H * 0.46);
       const alpha = 0.18 + v * 0.82;
       ctx2d.fillStyle = `rgba(255,82,82,${alpha.toFixed(2)})`;
       ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
@@ -447,6 +469,8 @@ function stopAudio() {
   clearInterval(timerInterval);
   clearInterval(progressInterval);
   if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  const canvas = document.getElementById('visualizer');
+  if (canvas?._vizRO) { canvas._vizRO.disconnect(); canvas._vizRO = null; }
 }
 
 async function startAudio(url) {
