@@ -36,7 +36,7 @@ function initWebAudio() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyserNode = audioCtx.createAnalyser();
     analyserNode.fftSize = 2048;
-    analyserNode.smoothingTimeConstant = 0.75;
+    analyserNode.smoothingTimeConstant = 0.82;
     const src = audioCtx.createMediaElementSource(audio);
     src.connect(analyserNode);
     analyserNode.connect(audioCtx.destination);
@@ -112,13 +112,12 @@ function startVisualizer() {
         const t  = bExact - b0;
         raw = (freqData[b0] * (1 - t) + freqData[b0 + 1] * t) / 255;
       }
-      const target = Math.pow(raw, 0.6);
+      const target = Math.pow(raw, 0.65);
 
-      // Frequency-dependent decay: bass drops faster, treble holds longer to avoid flicker
-      const t2    = i / N_BARS;
-      const decay = 0.22 - t2 * 0.14;   // 0.22 at bass → 0.08 at treble
-      if (target > barAmps[i]) barAmps[i] += (target - barAmps[i]) * 0.5;
-      else barAmps[i] = Math.max(0, barAmps[i] - decay);
+      const t2       = i / N_BARS;
+      const decayMul = 1 - (0.12 + t2 * 0.06);   // 0.88 at bass → 0.82 at treble
+      if (target >= barAmps[i]) barAmps[i] = target;
+      else barAmps[i] = Math.max(target, barAmps[i] * decayMul);
 
       const v     = barAmps[i];
       const halfH = Math.max(1.5 * dpr, v * H * 0.46);
