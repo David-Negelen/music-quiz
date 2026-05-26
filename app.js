@@ -35,7 +35,7 @@ function initWebAudio() {
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyserNode = audioCtx.createAnalyser();
-    analyserNode.fftSize = 256;            // 128 frequency bins
+    analyserNode.fftSize = 2048;           // 1024 bins → fine frequency resolution for log mapping
     analyserNode.smoothingTimeConstant = 0.8;
     // Route: audio element → analyser → speakers
     const src = audioCtx.createMediaElementSource(audio);
@@ -76,15 +76,29 @@ function startVisualizer() {
 
     analyserNode.getByteFrequencyData(freqData);
 
-    const N    = freqData.length;
-    const gap  = 2 * dpr;
-    const barW = Math.max(1, (W - gap * (N - 1)) / N);
+    const N_BARS   = 140;
+    const gap      = 1.5 * dpr;
+    const barW     = Math.max(1, (W - gap * (N_BARS - 1)) / N_BARS);
+    const bins     = analyserNode.frequencyBinCount;            // 1024
+    const nyquist  = audioCtx.sampleRate / 2;
+    const minFreq  = 60;
+    const maxFreq  = 16000;
 
     ctx2d.shadowBlur  = 10 * dpr;
     ctx2d.shadowColor = 'rgba(255,82,82,0.5)';
 
-    for (let i = 0; i < N; i++) {
-      const v     = freqData[i] / 255;
+    for (let i = 0; i < N_BARS; i++) {
+      // map bar index to a log-spaced frequency range
+      const fLow  = minFreq * Math.pow(maxFreq / minFreq,  i      / N_BARS);
+      const fHigh = minFreq * Math.pow(maxFreq / minFreq, (i + 1) / N_BARS);
+      const bLow  = Math.max(0,        Math.round(fLow  / nyquist * bins));
+      const bHigh = Math.min(bins - 1, Math.round(fHigh / nyquist * bins));
+
+      // average all FFT bins that fall in this bar's frequency range
+      let sum = 0, count = 0;
+      for (let b = bLow; b <= bHigh; b++) { sum += freqData[b]; count++; }
+      const v = count > 0 ? sum / count / 255 : 0;
+
       const halfH = Math.max(1.5 * dpr, v * H * 0.48);
       const alpha = 0.18 + v * 0.82;
       ctx2d.fillStyle = `rgba(255,82,82,${alpha.toFixed(2)})`;
