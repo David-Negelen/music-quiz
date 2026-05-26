@@ -61,12 +61,9 @@ function startVisualizer() {
   canvas.height = (canvas.offsetHeight || 160) * dpr;
 
   const ctx2d = canvas.getContext('2d');
-
-  const hasAnalyser = initWebAudio();
-  if (hasAnalyser && audioCtx.state === 'suspended') audioCtx.resume();
-
-  const bufLen  = hasAnalyser ? analyserNode.frequencyBinCount : 0;
-  const freqData = hasAnalyser ? new Uint8Array(bufLen) : null;
+  // Web Audio is initialised lazily on first user gesture in playBtn.onclick,
+  // so check analyserNode each frame rather than capturing it once here.
+  let freqData = null;
 
   function draw() {
     animFrameId = requestAnimationFrame(draw);
@@ -74,11 +71,12 @@ function startVisualizer() {
     const H = canvas.height;
     ctx2d.clearRect(0, 0, W, H);
 
-    if (!freqData) return;
+    if (!analyserNode) return;
+    if (!freqData) freqData = new Uint8Array(analyserNode.frequencyBinCount);
 
     analyserNode.getByteFrequencyData(freqData);
 
-    const N    = bufLen;
+    const N    = freqData.length;
     const gap  = 2 * dpr;
     const barW = Math.max(1, (W - gap * (N - 1)) / N);
 
@@ -86,7 +84,7 @@ function startVisualizer() {
     ctx2d.shadowColor = 'rgba(255,82,82,0.5)';
 
     for (let i = 0; i < N; i++) {
-      const v     = freqData[i] / 255;           // 0..1
+      const v     = freqData[i] / 255;
       const halfH = Math.max(1.5 * dpr, v * H * 0.48);
       const alpha = 0.18 + v * 0.82;
       ctx2d.fillStyle = `rgba(255,82,82,${alpha.toFixed(2)})`;
@@ -439,6 +437,7 @@ function stopAudio() {
 
 async function startAudio(url) {
   stopAudio();
+  audio.crossOrigin = 'anonymous';
   audio.src = url || '';
   audio.load();
   audio.volume = currentVolume;
@@ -500,15 +499,15 @@ async function startAudio(url) {
 
   playBtn.onclick = async () => {
     if (!audio.paused) { audio.pause(); return; }
-    if (audioCtx?.state === 'suspended') await audioCtx.resume();
+    initWebAudio();
+    if (audioCtx) await audioCtx.resume().catch(() => {});
     audio.play().catch(() => { showToast('Wiedergabe fehlgeschlagen.'); });
   };
 
   startVisualizer();
-  // On HTTP non-localhost origins the AudioContext starts suspended; await
-  // resume before play so the captured audio element actually produces sound.
-  if (audioCtx?.state === 'suspended') await audioCtx.resume();
+  if (audioCtx) await audioCtx.resume().catch(() => {});
   audio.play().catch(() => { if (playIcon) playIcon.textContent = '▶'; });
+
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────
@@ -1249,6 +1248,10 @@ function handleAnswer() {
 }
 
 async function advanceQuiz() {
+  // Initialize Web Audio while still in the user gesture context (before any await).
+  initWebAudio();
+  if (audioCtx) audioCtx.resume().catch(() => {});
+
   const idx = state.quizIndex;
   const q   = state.quizQuestions[idx];
   const ans = state.quizAnswers[idx];
@@ -2023,6 +2026,10 @@ function handleImportRun() {
 // ── Event Wiring ──────────────────────────────────────────────────────────
 
 async function startSession() {
+  // Initialize Web Audio while still in the user gesture context (before any await).
+  initWebAudio();
+  if (audioCtx) audioCtx.resume().catch(() => {});
+
   const setupError = document.getElementById('setup-error');
 
   if (state.library.length < 4) {
