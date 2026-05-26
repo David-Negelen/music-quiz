@@ -36,7 +36,7 @@ function initWebAudio() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyserNode = audioCtx.createAnalyser();
     analyserNode.fftSize = 2048;
-    analyserNode.smoothingTimeConstant = 0.6;
+    analyserNode.smoothingTimeConstant = 0.75;
     const src = audioCtx.createMediaElementSource(audio);
     src.connect(analyserNode);
     analyserNode.connect(audioCtx.destination);
