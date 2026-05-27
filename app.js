@@ -55,7 +55,8 @@ function startVisualizer() {
   const canvas = document.getElementById('visualizer');
   if (!canvas) return;
 
-  const dpr = window.devicePixelRatio || 1;
+  // Cap at 2× — 3× DPI gives negligible visual improvement but tanks GPU cost
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
   function resizeCanvas() {
     canvas.width  = (canvas.offsetWidth  || 360) * dpr;
@@ -73,63 +74,100 @@ function startVisualizer() {
   const N_BARS  = 600;
   const barAmps = new Float32Array(N_BARS);
 
-  function draw() {
-    animFrameId = requestAnimationFrame(draw);
-    const W = canvas.width;
-    const H = canvas.height;
-    ctx2d.clearRect(0, 0, W, H);
+  // Static per-bar lookup tables — built once, avoids Math.pow in the hot loop
+  const barGain     = new Float32Array(N_BARS);
+  const barExp      = new Float32Array(N_BARS);
+  const barDecayMul = new Float32Array(N_BARS);
+  const barBinLow   = new Int32Array(N_BARS);
+  const barBinHigh  = new Int32Array(N_BARS);
+  const barFracB0   = new Int32Array(N_BARS).fill(-1); // -1 = use range average
+  const barFracT    = new Float32Array(N_BARS);
 
-    if (!analyserNode) return;
-    if (!freqData) freqData = new Uint8Array(analyserNode.frequencyBinCount);
+  // Precomputed fillStyle strings — eliminates toFixed + template literal per bar per frame
+  const alphaStyles = Array.from({length: 101}, (_, k) =>
+    `rgba(255,82,82,${(k / 100).toFixed(2)})`);
 
-    analyserNode.getByteFrequencyData(freqData);
+  let lookupBuilt = false;
 
+  function buildLookup() {
     const bins    = analyserNode.frequencyBinCount;
     const nyquist = audioCtx.sampleRate / 2;
-
-    // 3-segment frequency mapping:
-    //   20% of bars → 20–300 Hz   (bass: few FFT bins, less resolution needed)
-    //   55% of bars → 300–5000 Hz (mids: most musical content, highest density)
-    //   25% of bars → 5000–14000 Hz (treble: texture, upper bound cuts dead ultrasonic zone)
-    const freqAt = t => {
+    const freqAt  = t => {
       if (t <= 0.08) return 20   * Math.pow(300   / 20,   t / 0.08);
       if (t <= 0.75) return 300  * Math.pow(5000  / 300,  (t - 0.08) / 0.67);
                      return 5000 * Math.pow(14000 / 5000, (t - 0.75) / 0.25);
     };
-
-    ctx2d.shadowBlur = 14 * dpr;
-
     for (let i = 0; i < N_BARS; i++) {
+      const t2       = i / N_BARS;
+      barGain[i]     = 1.0 + t2 * 1.0;
+      barExp[i]      = 2.0 + t2 * 0.8;
+      barDecayMul[i] = 1 - (0.12 + t2 * 0.06);
       const fLow  = freqAt(i / N_BARS);
       const fHigh = freqAt((i + 1) / N_BARS);
       const bLow  = Math.max(0,        Math.floor(fLow  / nyquist * bins));
       const bHigh = Math.min(bins - 1, Math.ceil(fHigh  / nyquist * bins));
-
-      let raw;
+      barBinLow[i]  = bLow;
+      barBinHigh[i] = bHigh;
       if (bHigh > bLow) {
+        barFracB0[i] = -1;
+      } else {
+        const bExact = Math.sqrt(fLow * fHigh) / nyquist * bins;
+        const b0     = Math.min(bins - 2, Math.floor(bExact));
+        barFracB0[i] = b0;
+        barFracT[i]  = bExact - b0;
+      }
+    }
+    lookupBuilt = true;
+  }
+
+  // One-time performance probe: measure 5 rAF intervals, disable shadow on slow devices
+  let shadowBlurVal = 14 * dpr;
+  let probeCount = 0, probeT0 = 0;
+  function probe(now) {
+    if (!probeT0) probeT0 = now;
+    if (++probeCount < 6) { requestAnimationFrame(probe); return; }
+    const avgMs = (now - probeT0) / (probeCount - 1);
+    if (avgMs > 22) shadowBlurVal = 0; // < 45fps baseline → low-end device
+    animFrameId = requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(probe);
+
+  function draw(now) {
+    animFrameId = requestAnimationFrame(draw);
+
+    if (!analyserNode) { ctx2d.clearRect(0, 0, canvas.width, canvas.height); return; }
+    if (!lookupBuilt) buildLookup();
+    if (!freqData) freqData = new Uint8Array(analyserNode.frequencyBinCount);
+
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx2d.clearRect(0, 0, W, H);
+
+    analyserNode.getByteFrequencyData(freqData);
+
+    ctx2d.shadowColor = 'rgba(255,82,82,0.6)';
+    ctx2d.shadowBlur  = shadowBlurVal;
+
+    for (let i = 0; i < N_BARS; i++) {
+      let raw;
+      if (barFracB0[i] < 0) {
+        const bLow = barBinLow[i], bHigh = barBinHigh[i];
         let sum = 0;
         for (let b = bLow; b <= bHigh; b++) sum += freqData[b];
         raw = sum / (bHigh - bLow + 1) / 255;
       } else {
-        const fCenter = Math.sqrt(fLow * fHigh);
-        const bExact  = fCenter / nyquist * bins;
-        const b0 = Math.min(bins - 2, Math.floor(bExact));
-        const t  = bExact - b0;
+        const b0 = barFracB0[i], t = barFracT[i];
         raw = (freqData[b0] * (1 - t) + freqData[b0 + 1] * t) / 255;
       }
-      const t2       = i / N_BARS;
-      const gain     = 1.0 + t2 * 1.0;                        // 1× at bass → 2× at treble
-      const exp      = 2.0 + t2 * 0.8;                        // 2.0 at bass → 2.8 at treble
-      const target   = Math.pow(raw * gain, exp);
-      const decayMul = 1 - (0.12 + t2 * 0.06);   // 0.88 at bass → 0.82 at treble
+
+      const target   = Math.pow(raw * barGain[i], barExp[i]);
+      const decayMul = barDecayMul[i];
       if (target >= barAmps[i]) barAmps[i] = target;
       else barAmps[i] = Math.max(target, barAmps[i] * decayMul);
 
       const v     = barAmps[i];
       const halfH = Math.max(1.5 * dpr, v * H * 0.28);
-      const alpha = 0.15 + v * 0.85;
-      ctx2d.shadowColor = `rgba(255,82,82,0.6)`;
-      ctx2d.fillStyle   = `rgba(255,82,82,${alpha.toFixed(2)})`;
+      ctx2d.fillStyle = alphaStyles[Math.min(100, Math.round((0.15 + v * 0.85) * 100))];
       const x  = Math.floor(i * W / N_BARS);
       const x2 = Math.floor((i + 1) * W / N_BARS);
       ctx2d.fillRect(x, H / 2 - halfH, x2 - x, halfH * 2);
@@ -137,8 +175,6 @@ function startVisualizer() {
 
     ctx2d.shadowBlur = 0;
   }
-
-  draw();
 }
 
 // ── Answer checking ───────────────────────────────────────────────────────
