@@ -84,8 +84,6 @@ function startVisualizer() {
 
     analyserNode.getByteFrequencyData(freqData);
 
-    const gap     = 0;
-    const barW    = Math.max(1, (W - gap * (N_BARS - 1)) / N_BARS);
     const bins    = analyserNode.frequencyBinCount;
     const nyquist = audioCtx.sampleRate / 2;
 
@@ -132,7 +130,9 @@ function startVisualizer() {
       const alpha = 0.15 + v * 0.85;
       ctx2d.shadowColor = `rgba(255,82,82,0.6)`;
       ctx2d.fillStyle   = `rgba(255,82,82,${alpha.toFixed(2)})`;
-      ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
+      const x  = Math.floor(i * W / N_BARS);
+      const x2 = Math.floor((i + 1) * W / N_BARS);
+      ctx2d.fillRect(x, H / 2 - halfH, x2 - x, halfH * 2);
     }
 
     ctx2d.shadowBlur = 0;
