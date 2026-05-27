@@ -50,6 +50,53 @@ function initWebAudio() {
   }
 }
 
+function initVizSettings() {
+  const panel  = document.getElementById('viz-settings-panel');
+  const btn    = document.getElementById('viz-settings-btn');
+  if (!panel || !btn) return;
+
+  // Open / close
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.hidden = !panel.hidden;
+  });
+  document.addEventListener('click', e => {
+    if (!panel.hidden && !panel.contains(e.target)) panel.hidden = true;
+  });
+
+  // Toggle helper
+  function makeToggle(id, key, defaultOn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isOn = () => defaultOn
+      ? localStorage.getItem(key) !== 'off'
+      : localStorage.getItem(key) === 'on';
+    el.classList.toggle('on', isOn());
+    el.addEventListener('click', () => {
+      localStorage.setItem(key, isOn() ? (defaultOn ? 'off' : 'off') : 'on');
+      el.classList.toggle('on', isOn());
+    });
+  }
+  makeToggle('glow-toggle', 'muzquiz_viz_glow', true);
+  makeToggle('gaps-toggle', 'muzquiz_viz_gaps', false);
+
+  // Bars segmented control
+  const segment = document.getElementById('bars-segment');
+  if (segment) {
+    const current = localStorage.getItem('muzquiz_viz_bars') || '600';
+    segment.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.value === current);
+      b.addEventListener('click', () => {
+        localStorage.setItem('muzquiz_viz_bars', b.dataset.value);
+        segment.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        panel.hidden = true;
+        startVisualizer();
+      });
+    });
+  }
+}
+
 function startVisualizer() {
   if (animFrameId) cancelAnimationFrame(animFrameId);
   const canvas = document.getElementById('visualizer');
@@ -120,37 +167,10 @@ function startVisualizer() {
     lookupBuilt = true;
   }
 
-  // Visualizer settings — persisted in localStorage
+  // Settings are managed by initVizSettings(); just read from localStorage here
   const glowOn = () => localStorage.getItem('muzquiz_viz_glow') !== 'off';
   const gapsOn = () => localStorage.getItem('muzquiz_viz_gaps') === 'on';
   const shadowBlurVal = () => glowOn() ? 14 * dpr : 0;
-
-  const glowBtn = document.getElementById('glow-toggle-btn');
-  if (glowBtn) {
-    glowBtn.classList.toggle('active', glowOn());
-    glowBtn.addEventListener('click', () => {
-      localStorage.setItem('muzquiz_viz_glow', glowOn() ? 'off' : 'on');
-      glowBtn.classList.toggle('active', glowOn());
-    });
-  }
-
-  const gapsBtn = document.getElementById('gaps-toggle-btn');
-  if (gapsBtn) {
-    gapsBtn.classList.toggle('active', gapsOn());
-    gapsBtn.addEventListener('click', () => {
-      localStorage.setItem('muzquiz_viz_gaps', gapsOn() ? 'off' : 'on');
-      gapsBtn.classList.toggle('active', gapsOn());
-    });
-  }
-
-  const barsSelect = document.getElementById('bars-select');
-  if (barsSelect) {
-    barsSelect.value = String(N_BARS);
-    barsSelect.addEventListener('change', () => {
-      localStorage.setItem('muzquiz_viz_bars', barsSelect.value);
-      startVisualizer();
-    });
-  }
 
   animFrameId = requestAnimationFrame(draw);
 
@@ -2343,6 +2363,7 @@ async function init() {
 
   renderLibrary();
   updateLibraryStatus();
+  initVizSettings();
 
   // Nav
   document.querySelectorAll('.nav-btn').forEach(btn => {
