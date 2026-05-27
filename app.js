@@ -71,7 +71,7 @@ function startVisualizer() {
   const ctx2d = canvas.getContext('2d');
   let freqData = null;
 
-  const N_BARS  = 600;
+  const N_BARS  = parseInt(localStorage.getItem('muzquiz_viz_bars') || '600', 10);
   const barAmps = new Float32Array(N_BARS);
 
   // Static per-bar lookup tables — built once, avoids Math.pow in the hot loop
@@ -120,8 +120,9 @@ function startVisualizer() {
     lookupBuilt = true;
   }
 
-  // Glow setting — persisted in localStorage, toggled by #glow-toggle-btn
+  // Visualizer settings — persisted in localStorage
   const glowOn = () => localStorage.getItem('muzquiz_viz_glow') !== 'off';
+  const gapsOn = () => localStorage.getItem('muzquiz_viz_gaps') === 'on';
   const shadowBlurVal = () => glowOn() ? 14 * dpr : 0;
 
   const glowBtn = document.getElementById('glow-toggle-btn');
@@ -130,6 +131,24 @@ function startVisualizer() {
     glowBtn.addEventListener('click', () => {
       localStorage.setItem('muzquiz_viz_glow', glowOn() ? 'off' : 'on');
       glowBtn.classList.toggle('active', glowOn());
+    });
+  }
+
+  const gapsBtn = document.getElementById('gaps-toggle-btn');
+  if (gapsBtn) {
+    gapsBtn.classList.toggle('active', gapsOn());
+    gapsBtn.addEventListener('click', () => {
+      localStorage.setItem('muzquiz_viz_gaps', gapsOn() ? 'off' : 'on');
+      gapsBtn.classList.toggle('active', gapsOn());
+    });
+  }
+
+  const barsSelect = document.getElementById('bars-select');
+  if (barsSelect) {
+    barsSelect.value = String(N_BARS);
+    barsSelect.addEventListener('change', () => {
+      localStorage.setItem('muzquiz_viz_bars', barsSelect.value);
+      startVisualizer();
     });
   }
 
@@ -150,6 +169,7 @@ function startVisualizer() {
 
     ctx2d.shadowColor = 'rgba(255,82,82,0.6)';
     ctx2d.shadowBlur  = shadowBlurVal();
+    const gap = gapsOn() ? 1 : 0;
 
     for (let i = 0; i < N_BARS; i++) {
       let raw;
@@ -173,7 +193,7 @@ function startVisualizer() {
       ctx2d.fillStyle = alphaStyles[Math.min(100, Math.round((0.15 + v * 0.85) * 100))];
       const x  = Math.floor(i * W / N_BARS);
       const x2 = Math.floor((i + 1) * W / N_BARS);
-      ctx2d.fillRect(x, H / 2 - halfH, x2 - x, halfH * 2);
+      ctx2d.fillRect(x, H / 2 - halfH, Math.max(1, x2 - x - gap), halfH * 2);
     }
 
     ctx2d.shadowBlur = 0;

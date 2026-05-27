@@ -1119,9 +1119,20 @@ body {
 .remove-song-no  { color: var(--text-3); }
 .remove-song-no:hover  { color: var(--text-2); border-color: var(--border-2); }
 
-/* Glow toggle */
-#glow-toggle-btn { margin-left: auto; }
-#glow-toggle-btn.active { color: var(--text); border-color: var(--border-2); }
+/* Visualizer controls */
+.viz-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+#glow-toggle-btn.active,
+#gaps-toggle-btn.active { color: var(--text); border-color: var(--border-2); }
+.bars-select {
+  background: none;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 5px 6px;
+  cursor: pointer;
+}
 
 /* Edit / Replace song buttons */
 .song-action-btn {
