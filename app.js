@@ -120,19 +120,22 @@ function startVisualizer() {
     lookupBuilt = true;
   }
 
-  // One-time performance probe: measure 5 rAF intervals, disable shadow on slow devices
-  let shadowBlurVal = 14 * dpr;
-  let probeCount = 0, probeT0 = 0;
-  function probe(now) {
-    if (!probeT0) probeT0 = now;
-    if (++probeCount < 6) { requestAnimationFrame(probe); return; }
-    const avgMs = (now - probeT0) / (probeCount - 1);
-    if (avgMs > 22) shadowBlurVal = 0; // < 45fps baseline → low-end device
-    animFrameId = requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(probe);
+  // Glow setting — persisted in localStorage, toggled by #glow-toggle-btn
+  const glowOn = () => localStorage.getItem('muzquiz_viz_glow') !== 'off';
+  const shadowBlurVal = () => glowOn() ? 14 * dpr : 0;
 
-  function draw(now) {
+  const glowBtn = document.getElementById('glow-toggle-btn');
+  if (glowBtn) {
+    glowBtn.classList.toggle('active', glowOn());
+    glowBtn.addEventListener('click', () => {
+      localStorage.setItem('muzquiz_viz_glow', glowOn() ? 'off' : 'on');
+      glowBtn.classList.toggle('active', glowOn());
+    });
+  }
+
+  animFrameId = requestAnimationFrame(draw);
+
+  function draw() {
     animFrameId = requestAnimationFrame(draw);
 
     if (!analyserNode) { ctx2d.clearRect(0, 0, canvas.width, canvas.height); return; }
@@ -146,7 +149,7 @@ function startVisualizer() {
     analyserNode.getByteFrequencyData(freqData);
 
     ctx2d.shadowColor = 'rgba(255,82,82,0.6)';
-    ctx2d.shadowBlur  = shadowBlurVal;
+    ctx2d.shadowBlur  = shadowBlurVal();
 
     for (let i = 0; i < N_BARS; i++) {
       let raw;

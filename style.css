@@ -1119,6 +1119,10 @@ body {
 .remove-song-no  { color: var(--text-3); }
 .remove-song-no:hover  { color: var(--text-2); border-color: var(--border-2); }
 
+/* Glow toggle */
+#glow-toggle-btn { margin-left: auto; }
+#glow-toggle-btn.active { color: var(--text); border-color: var(--border-2); }
+
 /* Edit / Replace song buttons */
 .song-action-btn {
   background: none;
