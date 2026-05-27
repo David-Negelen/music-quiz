@@ -112,7 +112,8 @@ function startVisualizer() {
         const t  = bExact - b0;
         raw = (freqData[b0] * (1 - t) + freqData[b0 + 1] * t) / 255;
       }
-      const target = Math.pow(raw, 0.65);
+      const exp    = 2.0 + t2 * 1.5;   // 2.0 at bass → 3.5 at treble
+      const target = Math.pow(raw, exp);
 
       const t2       = i / N_BARS;
       const decayMul = 1 - (0.12 + t2 * 0.06);   // 0.88 at bass → 0.82 at treble
