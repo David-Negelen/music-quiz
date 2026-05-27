@@ -73,7 +73,7 @@ function initVizSettings() {
       : localStorage.getItem(key) === 'on';
     el.classList.toggle('on', isOn());
     el.addEventListener('click', () => {
-      localStorage.setItem(key, isOn() ? (defaultOn ? 'off' : 'off') : 'on');
+      localStorage.setItem(key, isOn() ? 'off' : 'on');
       el.classList.toggle('on', isOn());
     });
   }
