@@ -70,7 +70,7 @@ function startVisualizer() {
   const ctx2d = canvas.getContext('2d');
   let freqData = null;
 
-  const N_BARS  = 220;
+  const N_BARS  = 600;
   const barAmps = new Float32Array(N_BARS);
 
   function draw() {
@@ -84,7 +84,7 @@ function startVisualizer() {
 
     analyserNode.getByteFrequencyData(freqData);
 
-    const gap     = 1.5 * dpr;
+    const gap     = 0.8 * dpr;
     const barW    = Math.max(1, (W - gap * (N_BARS - 1)) / N_BARS);
     const bins    = analyserNode.frequencyBinCount;
     const nyquist = audioCtx.sampleRate / 2;
