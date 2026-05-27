@@ -91,8 +91,7 @@ function startVisualizer() {
     const minFreq = 20;
     const maxFreq = Math.min(20000, nyquist);
 
-    ctx2d.shadowBlur  = 10 * dpr;
-    ctx2d.shadowColor = 'rgba(255,82,82,0.5)';
+    ctx2d.shadowBlur = 10 * dpr;
 
     for (let i = 0; i < N_BARS; i++) {
       const fLow  = minFreq * Math.pow(maxFreq / minFreq,  i      / N_BARS);
@@ -113,7 +112,7 @@ function startVisualizer() {
         raw = (freqData[b0] * (1 - t) + freqData[b0 + 1] * t) / 255;
       }
       const t2       = i / N_BARS;
-      const exp      = 2.0 + t2 * 1.5;   // 2.0 at bass → 3.5 at treble
+      const exp      = 2.0 + t2 * 0.8;   // 2.0 at bass → 2.8 at treble
       const target   = Math.pow(raw, exp);
       const decayMul = 1 - (0.12 + t2 * 0.06);   // 0.88 at bass → 0.82 at treble
       if (target >= barAmps[i]) barAmps[i] = target;
@@ -122,7 +121,10 @@ function startVisualizer() {
       const v     = barAmps[i];
       const halfH = Math.max(1.5 * dpr, v * H * 0.46);
       const alpha = 0.18 + v * 0.82;
-      ctx2d.fillStyle = `rgba(255,82,82,${alpha.toFixed(2)})`;
+      const cg    = Math.round(70 + t2 * 40);   // 70 at bass → 110 at treble
+      const cb    = Math.round(70 - t2 * 25);   // 70 at bass → 45 at treble
+      ctx2d.shadowColor = `rgba(255,${cg},${cb},0.5)`;
+      ctx2d.fillStyle   = `rgba(255,${cg},${cb},${alpha.toFixed(2)})`;
       ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
     }
 
