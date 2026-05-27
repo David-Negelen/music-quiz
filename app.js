@@ -88,14 +88,22 @@ function startVisualizer() {
     const barW    = Math.max(1, (W - gap * (N_BARS - 1)) / N_BARS);
     const bins    = analyserNode.frequencyBinCount;
     const nyquist = audioCtx.sampleRate / 2;
-    const minFreq = 20;
-    const maxFreq = Math.min(20000, nyquist);
+
+    // 3-segment frequency mapping:
+    //   20% of bars → 20–300 Hz   (bass: few FFT bins, less resolution needed)
+    //   55% of bars → 300–5000 Hz (mids: most musical content, highest density)
+    //   25% of bars → 5000–14000 Hz (treble: texture, upper bound cuts dead ultrasonic zone)
+    const freqAt = t => {
+      if (t <= 0.20) return 20   * Math.pow(300   / 20,   t / 0.20);
+      if (t <= 0.75) return 300  * Math.pow(5000  / 300,  (t - 0.20) / 0.55);
+                     return 5000 * Math.pow(14000 / 5000, (t - 0.75) / 0.25);
+    };
 
     ctx2d.shadowBlur = 14 * dpr;
 
     for (let i = 0; i < N_BARS; i++) {
-      const fLow  = minFreq * Math.pow(maxFreq / minFreq,  i      / N_BARS);
-      const fHigh = minFreq * Math.pow(maxFreq / minFreq, (i + 1) / N_BARS);
+      const fLow  = freqAt(i / N_BARS);
+      const fHigh = freqAt((i + 1) / N_BARS);
       const bLow  = Math.max(0,        Math.floor(fLow  / nyquist * bins));
       const bHigh = Math.min(bins - 1, Math.ceil(fHigh  / nyquist * bins));
 
