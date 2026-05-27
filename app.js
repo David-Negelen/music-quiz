@@ -35,7 +35,7 @@ function initWebAudio() {
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyserNode = audioCtx.createAnalyser();
-    analyserNode.fftSize = 2048;
+    analyserNode.fftSize = 8192;
     analyserNode.smoothingTimeConstant = 0.82;
     const src = audioCtx.createMediaElementSource(audio);
     src.connect(analyserNode);
@@ -92,8 +92,8 @@ function startVisualizer() {
     //   55% of bars → 300–5000 Hz (mids: most musical content, highest density)
     //   25% of bars → 5000–14000 Hz (treble: texture, upper bound cuts dead ultrasonic zone)
     const freqAt = t => {
-      if (t <= 0.20) return 20   * Math.pow(300   / 20,   t / 0.20);
-      if (t <= 0.75) return 300  * Math.pow(5000  / 300,  (t - 0.20) / 0.55);
+      if (t <= 0.08) return 20   * Math.pow(300   / 20,   t / 0.08);
+      if (t <= 0.75) return 300  * Math.pow(5000  / 300,  (t - 0.08) / 0.67);
                      return 5000 * Math.pow(14000 / 5000, (t - 0.75) / 0.25);
     };
 
