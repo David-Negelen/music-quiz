@@ -120,15 +120,15 @@ function startVisualizer() {
         raw = (freqData[b0] * (1 - t) + freqData[b0 + 1] * t) / 255;
       }
       const t2       = i / N_BARS;
-      const gain     = 1.0 + t2 * 2.0;                        // boost treble to offset natural 1/f energy drop
-      const exp      = 2.0 + t2 * 0.4;                        // 2.0 at bass → 2.4 at treble
+      const gain     = 1.0 + t2 * 1.0;                        // 1× at bass → 2× at treble
+      const exp      = 2.0 + t2 * 0.8;                        // 2.0 at bass → 2.8 at treble
       const target   = Math.pow(Math.min(1, raw * gain), exp);
       const decayMul = 1 - (0.12 + t2 * 0.06);   // 0.88 at bass → 0.82 at treble
       if (target >= barAmps[i]) barAmps[i] = target;
       else barAmps[i] = Math.max(target, barAmps[i] * decayMul);
 
       const v     = barAmps[i];
-      const halfH = Math.max(1.5 * dpr, v * H * 0.40);
+      const halfH = Math.max(1.5 * dpr, v * H * 0.5);
       const alpha = 0.15 + v * 0.85;
       const cg    = Math.round(50 + t2 * 150);  // 50 at bass → 200 at treble (red → amber)
       const cb    = Math.round(50 - t2 * 35);   // 50 at bass → 15 at treble
