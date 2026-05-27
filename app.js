@@ -70,7 +70,7 @@ function startVisualizer() {
   const ctx2d = canvas.getContext('2d');
   let freqData = null;
 
-  const N_BARS  = 140;
+  const N_BARS  = 220;
   const barAmps = new Float32Array(N_BARS);
 
   function draw() {
@@ -130,10 +130,8 @@ function startVisualizer() {
       const v     = barAmps[i];
       const halfH = Math.max(1.5 * dpr, v * H * 0.28);
       const alpha = 0.15 + v * 0.85;
-      const cg    = Math.round(50 + t2 * 150);  // 50 at bass → 200 at treble (red → amber)
-      const cb    = Math.round(50 - t2 * 35);   // 50 at bass → 15 at treble
-      ctx2d.shadowColor = `rgba(255,${cg},${cb},0.6)`;
-      ctx2d.fillStyle   = `rgba(255,${cg},${cb},${alpha.toFixed(2)})`;
+      ctx2d.shadowColor = `rgba(255,82,82,0.6)`;
+      ctx2d.fillStyle   = `rgba(255,82,82,${alpha.toFixed(2)})`;
       ctx2d.fillRect(i * (barW + gap), H / 2 - halfH, barW, halfH * 2);
     }
 
