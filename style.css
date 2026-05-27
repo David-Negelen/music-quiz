@@ -1120,13 +1120,13 @@ body {
 .remove-song-no:hover  { color: var(--text-2); border-color: var(--border-2); }
 
 /* Visualizer settings menu */
-.viz-settings-wrap { position: relative; margin-left: auto; }
+.viz-settings-wrap { position: relative; }
 
 .viz-settings-btn { font-size: 14px; padding: 5px 9px; }
 
 .viz-settings-panel {
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 8px);
   right: 0;
   background: var(--surface-2);
   border: 1px solid var(--border-2);
