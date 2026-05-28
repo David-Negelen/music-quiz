@@ -18,6 +18,20 @@ Opens at [http://localhost:3000](http://localhost:3000). The server handles both
 
 **Quiz** — start a study session. Songs are served in spaced repetition order: overdue first, then new, then not yet due. Uncheck "All songs" to cap the batch size.
 
+## Visualizer
+
+While a preview plays, an audio visualizer shows a bar spectrum across the quiz card. It uses the Web Audio API with an 8192-point FFT and a three-segment frequency map (8 % bass / 67 % mids / 25 % treble) so the bars are dense in the musically active range and don't look blocky on the left.
+
+The **⚙** button in the top bar opens the visualizer settings:
+
+| Setting | Options | Default |
+|---|---|---|
+| Glow | on / off | on |
+| Gaps | on / off | off |
+| Bars | 100 / 200 / 400 / 600 | 600 |
+
+Settings persist in `localStorage`.
+
 ## Answering
 
 A 30-second preview plays automatically. Type in all three fields and click Check (or press Enter). Year answers must be exact; title and artist answers are case-insensitive, ignore punctuation, and treat a leading "The" as optional. After checking, the correct answers appear inline and the Next button advances to the next song.
