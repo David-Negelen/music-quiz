@@ -537,6 +537,11 @@ body {
 .msb-new     { background: rgba(255,255,255,0.12); }
 .msb-learned { background: var(--success); }
 .msb-notdue  { background: rgba(255,255,255,0.08); }
+/* Tier-based segments */
+.msb-tier-new      { background: rgba(255,255,255,0.18); }
+.msb-tier-strug    { background: var(--error); }
+.msb-tier-learn    { background: var(--accent); }
+.msb-tier-mastered { background: var(--success); }
 
 .mastery-seg-legend { display: flex; gap: 16px; flex-wrap: wrap; }
 
@@ -747,10 +752,11 @@ body {
   gap: 12px;
 }
 
-.quiz-progress-group { display: flex; align-items: center; gap: 10px; flex: 1; }
+.quiz-progress-group { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .quiz-progress { font-size: 12px; color: var(--text-3); font-weight: 500; white-space: nowrap; }
 .quiz-progress-bar  { flex: 1; height: 1px; background: var(--surface-3); border-radius: 1px; overflow: hidden; }
 .quiz-progress-fill { height: 100%; background: var(--accent); border-radius: 1px; transition: width 0.3s ease; width: 0%; }
+.session-comp { font-size: 11px; color: var(--text-3); white-space: nowrap; letter-spacing: 0.1px; }
 
 .quiz-score-display { font-size: 13px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
 

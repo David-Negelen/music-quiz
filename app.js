@@ -14,6 +14,7 @@ const state = {
   sessionStartTime: 0,
   historyOffset: 0,
   librarySort: 'title',
+  sessionBreakdown: null,
 };
 
 const audio = document.getElementById('preview-audio');
@@ -284,6 +285,25 @@ function getMasteryStats() {
   return counts;
 }
 
+function getSongTier(song) {
+  const key      = String(song.id);
+  const s        = songStats[key];
+  const attempts = s?.title?.a || 0;
+  const correct  = (s?.title?.c || 0) + (s?.artist?.c || 0) + (s?.year?.c || 0);
+  const accuracy = attempts > 0 ? correct / (attempts * 3) : 0;
+  const last     = song.lastResult != null ? song.lastResult : 0;
+  if (attempts === 0)                    return 'new';
+  if (last <= 1 || accuracy < 0.50)     return 'struggling';
+  if (accuracy < 0.80)                   return 'learning';
+  return 'mastered';
+}
+
+function getTierCounts() {
+  const counts = { new: 0, struggling: 0, learning: 0, mastered: 0 };
+  for (const song of state.library) counts[getSongTier(song)]++;
+  return counts;
+}
+
 function getFieldMastery(id) {
   const key = String(id);
   const s = songStats[key];
@@ -350,6 +370,11 @@ async function loadLibrary() {
       srEase_year:     r.sr_ease_year     || 2.5,
       srDue_year:      r.sr_due_year      || null,
       srReviews_year:  r.sr_reviews_year  || 0,
+      // Tier tracking
+      lastResult:   r.last_result   != null ? r.last_result : null,
+      lastReviewed: r.last_reviewed || null,
+      firstSeen:    r.first_seen    || null,
+      streak:       r.streak        || 0,
     }));
     songStats = {};
     for (const r of rows) {
@@ -511,11 +536,9 @@ async function buildStudySession() {
     const res = await fetch(`/api/songs/queue?${qs}`);
     const data = await res.json();
     const songs = data.queue || [];
-    
-    if (data.note) {
-      console.log('Queue note:', data.note);
-    }
-    
+
+    state.sessionBreakdown = data.breakdown || null;
+
     if (!songs.length) return null;
     return songs.map(raw => ({
       song: {
@@ -787,61 +810,26 @@ function renderMasteryOverview() {
   if (!el) return;
   if (!state.library.length) { el.innerHTML = ''; return; }
 
-  const today = new Date().toISOString().slice(0, 10);
-  let dueToday = 0, newSongs = 0, learned = 0, notDue = 0;
+  const counts = getTierCounts();
+  const total  = state.library.length;
 
-  for (const s of state.library) {
-    // New: all three sr_due_* are null
-    const isNew = !s.srDue_title && !s.srDue_artist && !s.srDue_year;
-    
-    if (isNew) {
-      newSongs++;
-    } else {
-      // Check if any field is due today
-      const fields = ['title', 'artist', 'year'];
-      const anyDue = fields.some(f => {
-        const due = s[`srDue_${f}`];
-        return due && due <= today;
-      });
-
-      if (anyDue) {
-        dueToday++;
-      } else {
-        // Check if learned: all three have >= 3 reviews and all are in future
-        const allLearned = 
-          (s.srReviews_title >= 3) && (s.srReviews_artist >= 3) && (s.srReviews_year >= 3);
-        const allFuture = 
-          (!s.srDue_title || s.srDue_title > today) &&
-          (!s.srDue_artist || s.srDue_artist > today) &&
-          (!s.srDue_year || s.srDue_year > today);
-        
-        if (allLearned && allFuture) {
-          learned++;
-        } else {
-          notDue++;
-        }
-      }
-    }
-  }
-
-  const total = state.library.length;
-  const duePct     = total ? (dueToday / total) * 100 : 0;
-  const newPct     = total ? (newSongs  / total) * 100 : 0;
-  const learnedPct = total ? (learned   / total) * 100 : 0;
-  const notDuePct  = total ? (notDue    / total) * 100 : 0;
+  const newPct   = total ? (counts.new        / total) * 100 : 0;
+  const strugPct = total ? (counts.struggling / total) * 100 : 0;
+  const learnPct = total ? (counts.learning   / total) * 100 : 0;
+  const mastPct  = total ? (counts.mastered   / total) * 100 : 0;
 
   el.innerHTML = `
     <div class="mastery-seg-bar-track">
-      <div class="msb-seg msb-due"     style="width:${duePct}%"></div>
-      <div class="msb-seg msb-new"     style="width:${newPct}%"></div>
-      <div class="msb-seg msb-learned" style="width:${learnedPct}%"></div>
-      <div class="msb-seg msb-notdue"  style="width:${notDuePct}%"></div>
+      <div class="msb-seg msb-tier-new"      style="width:${newPct}%"></div>
+      <div class="msb-seg msb-tier-strug"    style="width:${strugPct}%"></div>
+      <div class="msb-seg msb-tier-learn"    style="width:${learnPct}%"></div>
+      <div class="msb-seg msb-tier-mastered" style="width:${mastPct}%"></div>
     </div>
     <div class="mastery-seg-legend">
-      <span class="msl-item"><span class="msl-dot" style="background:var(--accent)"></span>${dueToday} fällig</span>
-      <span class="msl-item"><span class="msl-dot" style="background:var(--warning)"></span>${newSongs} neu</span>
-      <span class="msl-item"><span class="msl-dot" style="background:var(--success)"></span>${learned} gelernt</span>
-      <span class="msl-item"><span class="msl-dot" style="background:var(--text-3)"></span>${notDue} nicht fällig</span>
+      <span class="msl-item"><span class="msl-dot" style="background:rgba(255,255,255,0.25)"></span>${counts.new} Neu</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--error)"></span>${counts.struggling} Kämpfend</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--accent)"></span>${counts.learning} Lernend</span>
+      <span class="msl-item"><span class="msl-dot" style="background:var(--success)"></span>${counts.mastered} Gemeistert</span>
     </div>`;
 }
 
@@ -1334,6 +1322,11 @@ function handleAnswer() {
   if (correctCount === 3) { state.quizStreak++; fireConfetti(); } else { state.quizStreak = 0; }
   updateStreakDisplay();
   state.quizAnswers.push({ song: q.song, correct });
+
+  // Keep in-memory lastResult current so tier counts on the setup screen stay accurate
+  q.song.lastResult = correctCount;
+  const libSong = state.library.find(s => s.id === q.song.id);
+  if (libSong) libSong.lastResult = correctCount;
 
   for (const type of ['title', 'artist', 'year']) {
     recordAnswer(q.song.id, type, correct[type]);
@@ -2198,6 +2191,22 @@ async function startSession() {
   state.sessionStartTime = Date.now();
   state.quizStreak = 0;
   updateStreakDisplay();
+
+  // Show session composition legend in quiz header
+  const compEl = document.getElementById('session-comp');
+  if (compEl) {
+    const bd = state.sessionBreakdown;
+    if (bd) {
+      const parts = [];
+      if (bd.new        > 0) parts.push(`${bd.new} neu`);
+      if (bd.struggling > 0) parts.push(`${bd.struggling} kämpfend`);
+      if (bd.learning   > 0) parts.push(`${bd.learning} lernend`);
+      if (bd.mastered   > 0) parts.push(`${bd.mastered} review`);
+      compEl.textContent = parts.join(' · ');
+    } else {
+      compEl.textContent = '';
+    }
+  }
 
   showView('quiz-active');
   renderQuestion();
