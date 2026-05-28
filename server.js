@@ -545,8 +545,9 @@ function handleGetSongHistory(id, res) {
 
 function handleGetQueue(req, res) {
   const qs = new URL(req.url, 'http://x').searchParams;
-  const countParam = qs.get('count');
-  const batchSize  = countParam ? Math.max(4, parseInt(countParam, 10)) : 20;
+  const countParam  = qs.get('count');
+  const unlimited   = !countParam;
+  const batchSize   = countParam ? Math.max(4, parseInt(countParam, 10)) : 0;
 
   const genresParam = qs.get('genres');
   let allSongs = db.prepare('SELECT * FROM songs ORDER BY added_at ASC').all();
@@ -559,51 +560,66 @@ function handleGetQueue(req, res) {
   const tiers = { new: [], struggling: [], learning: [], mastered: [] };
   for (const song of allSongs) tiers[computeSongTier(song)].push(song);
 
-  // Sort within tiers: new by addedAt ASC (oldest first); struggling/learning by lastReviewed ASC
+  // Sort within tiers: new by addedAt ASC; struggling/learning by lastReviewed ASC
   tiers.new.sort((a, b)        => (a.added_at      || '').localeCompare(b.added_at      || ''));
   tiers.struggling.sort((a, b) => (a.last_reviewed || '').localeCompare(b.last_reviewed || ''));
   tiers.learning.sort((a, b)   => (a.last_reviewed || '').localeCompare(b.last_reviewed || ''));
 
-  // Target slot counts per tier
-  const newTarget   = Math.min(8, Math.round(batchSize * 0.45));
-  const strugTarget = Math.round(batchSize * 0.32);
-  const learnTarget = Math.round(batchSize * 0.18);
-  const mastTarget  = Math.max(1, batchSize - newTarget - strugTarget - learnTarget);
+  let newPick, strugPick, learnPick, mastPick;
 
-  let newPick   = tiers.new.slice(0, newTarget);
-  let strugPick = tiers.struggling.slice(0, strugTarget);
-  let learnPick = tiers.learning.slice(0, learnTarget);
-  let mastPick  = shuffleInPlace([...tiers.mastered]).slice(0, mastTarget);
+  if (unlimited) {
+    // Return all songs in tier priority order — new first, mastered last
+    newPick   = tiers.new;
+    strugPick = tiers.struggling;
+    learnPick = tiers.learning;
+    mastPick  = shuffleInPlace([...tiers.mastered]);
+  } else {
+    // Capped session: percentage-based slot allocation
+    const newTarget   = Math.min(8, Math.round(batchSize * 0.45));
+    const strugTarget = Math.round(batchSize * 0.32);
+    const learnTarget = Math.round(batchSize * 0.18);
+    const mastTarget  = Math.max(1, batchSize - newTarget - strugTarget - learnTarget);
 
-  // Fill any deficit from other tiers (priority: struggling > learning > new > mastered)
-  let deficit = batchSize - newPick.length - strugPick.length - learnPick.length - mastPick.length;
-  if (deficit > 0) {
-    const extra = tiers.struggling.slice(strugPick.length, strugPick.length + deficit);
-    strugPick = [...strugPick, ...extra]; deficit -= extra.length;
-  }
-  if (deficit > 0) {
-    const extra = tiers.learning.slice(learnPick.length, learnPick.length + deficit);
-    learnPick = [...learnPick, ...extra]; deficit -= extra.length;
-  }
-  if (deficit > 0) {
-    const extra = tiers.new.slice(newPick.length, newPick.length + deficit);
-    newPick = [...newPick, ...extra]; deficit -= extra.length;
-  }
-  if (deficit > 0) {
-    const usedIds = new Set(mastPick.map(s => s.id));
-    const extra = shuffleInPlace(tiers.mastered.filter(s => !usedIds.has(s.id))).slice(0, deficit);
-    mastPick = [...mastPick, ...extra];
+    newPick   = tiers.new.slice(0, newTarget);
+    strugPick = tiers.struggling.slice(0, strugTarget);
+    learnPick = tiers.learning.slice(0, learnTarget);
+    mastPick  = shuffleInPlace([...tiers.mastered]).slice(0, mastTarget);
+
+    // Fill any deficit from other tiers (priority: struggling > learning > new > mastered)
+    let deficit = batchSize - newPick.length - strugPick.length - learnPick.length - mastPick.length;
+    if (deficit > 0) {
+      const extra = tiers.struggling.slice(strugPick.length, strugPick.length + deficit);
+      strugPick = [...strugPick, ...extra]; deficit -= extra.length;
+    }
+    if (deficit > 0) {
+      const extra = tiers.learning.slice(learnPick.length, learnPick.length + deficit);
+      learnPick = [...learnPick, ...extra]; deficit -= extra.length;
+    }
+    if (deficit > 0) {
+      const extra = tiers.new.slice(newPick.length, newPick.length + deficit);
+      newPick = [...newPick, ...extra]; deficit -= extra.length;
+    }
+    if (deficit > 0) {
+      const usedIds = new Set(mastPick.map(s => s.id));
+      const extra = shuffleInPlace(tiers.mastered.filter(s => !usedIds.has(s.id))).slice(0, deficit);
+      mastPick = [...mastPick, ...extra];
+    }
   }
 
-  // Assemble: keep first 1–2 songs from new/struggling for intentional opening
-  const front = [];
-  if (newPick.length > 0)   front.push(newPick[0]);
-  if (strugPick.length > 0) front.push(strugPick[0]);
-  const frontIds = new Set(front.map(s => s.id));
-  const rest = shuffleInPlace(
-    [...newPick, ...strugPick, ...learnPick, ...mastPick].filter(s => !frontIds.has(s.id))
-  );
-  const queue = [...front, ...rest];
+  // Assemble queue: in unlimited mode keep strict tier order; in capped mode shuffle (new/struggling first)
+  let queue;
+  if (unlimited) {
+    queue = [...newPick, ...strugPick, ...learnPick, ...mastPick];
+  } else {
+    const front = [];
+    if (newPick.length > 0)   front.push(newPick[0]);
+    if (strugPick.length > 0) front.push(strugPick[0]);
+    const frontIds = new Set(front.map(s => s.id));
+    const rest = shuffleInPlace(
+      [...newPick, ...strugPick, ...learnPick, ...mastPick].filter(s => !frontIds.has(s.id))
+    );
+    queue = [...front, ...rest];
+  }
 
   return json(res, 200, {
     queue,
