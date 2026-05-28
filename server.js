@@ -100,6 +100,31 @@ try { db.prepare('ALTER TABLE songs ADD COLUMN genre TEXT DEFAULT NULL').run(); 
 // Migrate: track which storefront the preview was fetched from
 try { db.prepare('ALTER TABLE songs ADD COLUMN preview_country TEXT DEFAULT NULL').run(); } catch {}
 
+// Migrate: tier tracking fields
+for (const [col, def] of [
+  ['first_seen',    'TEXT    DEFAULT NULL'],
+  ['last_result',   'INTEGER DEFAULT NULL'],
+  ['last_reviewed', 'TEXT    DEFAULT NULL'],
+  ['streak',        'INTEGER DEFAULT 0'],
+]) {
+  try { db.prepare(`ALTER TABLE songs ADD COLUMN ${col} ${def}`).run(); } catch {}
+}
+
+// Migrate: backfill tier fields for songs that already have session history
+try {
+  db.prepare(`
+    UPDATE songs SET
+      first_seen    = (SELECT date(MIN(answered_at)) FROM session_results WHERE song_id = songs.id),
+      last_reviewed = (SELECT date(MAX(answered_at)) FROM session_results WHERE song_id = songs.id),
+      last_result   = (SELECT got_title + got_artist + got_year FROM session_results
+                       WHERE song_id = songs.id ORDER BY answered_at DESC LIMIT 1)
+    WHERE first_seen IS NULL
+      AND (SELECT COUNT(*) FROM session_results WHERE song_id = songs.id) > 0
+  `).run();
+} catch (e) {
+  console.error('Tier fields backfill failed:', e.message);
+}
+
 // Migrate data from old columns to per-field columns if old columns have data
 try {
   const rows = db.prepare('SELECT id, sr_interval, sr_ease, sr_due, sr_reviews FROM songs WHERE sr_interval > 0 OR sr_ease != 2.5 OR sr_due IS NOT NULL OR sr_reviews > 0').all();
@@ -283,35 +308,23 @@ function updateSR(interval, ease, reviews, got, baseDate) {
   };
 }
 
-function daysBetween(a, b) {
-  // Returns days from b to a (positive means a is after b)
-  return Math.round((new Date(a) - new Date(b)) / 86400000);
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
-function queueScore(song) {
-  const today = new Date().toISOString().split('T')[0];
-  const fields = ['title', 'artist', 'year'];
-  let score = 0;
-
-  for (const f of fields) {
-    const due  = song[`sr_due_${f}`];
-    const ease = song[`sr_ease_${f}`];
-
-    if (due === null) {
-      // Never seen — highest priority
-      score += 0;
-    } else if (due <= today) {
-      // Overdue — priority scales with how overdue and how low the ease is
-      const daysOverdue = daysBetween(today, due);
-      score += 10 - Math.min(9, daysOverdue) - (2.5 - ease);
-    } else {
-      // Not yet due — deprioritise
-      const daysUntilDue = daysBetween(due, today);
-      score += 100 + daysUntilDue;
-    }
-  }
-
-  return score;
+function computeSongTier(song) {
+  const attempts    = song.attempts_title || 0;
+  const correct     = (song.score_title || 0) + (song.score_artist || 0) + (song.score_year || 0);
+  const accuracy    = attempts > 0 ? correct / (attempts * 3) : 0;
+  const lastResult  = song.last_result != null ? song.last_result : 0;
+  if (attempts === 0)                       return 'new';
+  if (lastResult <= 1 || accuracy < 0.50)  return 'struggling';
+  if (accuracy < 0.80)                      return 'learning';
+  return 'mastered';
 }
 
 // ── Route handlers ─────────────────────────────────────────────────────────
@@ -436,6 +449,12 @@ async function handlePostSessionResult(sessionId, req, res) {
   applySRUpdate(songId, 'title',  gotTitle,  today);
   applySRUpdate(songId, 'artist', gotArtist, today);
   applySRUpdate(songId, 'year',   gotYear,   today);
+  // Update tier tracking fields
+  const songRow  = db.prepare('SELECT first_seen, streak FROM songs WHERE id = ?').get(songId);
+  const newResult = gotTitle + gotArtist + gotYear;
+  const newStreak = newResult === 3 ? ((songRow && songRow.streak) || 0) + 1 : 0;
+  db.prepare(`UPDATE songs SET first_seen=COALESCE(first_seen,?), last_result=?, last_reviewed=?, streak=? WHERE id=?`)
+    .run(today, newResult, today, newStreak, songId);
   return json(res, 201, { ok: true });
 }
 
@@ -527,19 +546,80 @@ function handleGetSongHistory(id, res) {
 function handleGetQueue(req, res) {
   const qs = new URL(req.url, 'http://x').searchParams;
   const countParam = qs.get('count');
-  const count = countParam ? Math.max(1, parseInt(countParam)) : 0; // 0 means all
-  
+  const batchSize  = countParam ? Math.max(4, parseInt(countParam, 10)) : 20;
+
   const genresParam = qs.get('genres');
-  let songs = db.prepare('SELECT * FROM songs ORDER BY added_at DESC').all();
+  let allSongs = db.prepare('SELECT * FROM songs ORDER BY added_at ASC').all();
   if (genresParam) {
     const allowed = new Set(genresParam.split(','));
-    songs = songs.filter(s => allowed.has(s.genre || '__unknown__'));
+    allSongs = allSongs.filter(s => allowed.has(s.genre || '__unknown__'));
   }
-  // Shuffle randomly
-  const shuffled = [...songs].sort(() => Math.random() - 0.5);
-  const queue = count > 0 ? shuffled.slice(0, count) : shuffled;
 
-  return json(res, 200, { queue });
+  // Bucket songs by tier
+  const tiers = { new: [], struggling: [], learning: [], mastered: [] };
+  for (const song of allSongs) tiers[computeSongTier(song)].push(song);
+
+  // Sort within tiers: new by addedAt ASC (oldest first); struggling/learning by lastReviewed ASC
+  tiers.new.sort((a, b)        => (a.added_at      || '').localeCompare(b.added_at      || ''));
+  tiers.struggling.sort((a, b) => (a.last_reviewed || '').localeCompare(b.last_reviewed || ''));
+  tiers.learning.sort((a, b)   => (a.last_reviewed || '').localeCompare(b.last_reviewed || ''));
+
+  // Target slot counts per tier
+  const newTarget   = Math.min(8, Math.round(batchSize * 0.45));
+  const strugTarget = Math.round(batchSize * 0.32);
+  const learnTarget = Math.round(batchSize * 0.18);
+  const mastTarget  = Math.max(1, batchSize - newTarget - strugTarget - learnTarget);
+
+  let newPick   = tiers.new.slice(0, newTarget);
+  let strugPick = tiers.struggling.slice(0, strugTarget);
+  let learnPick = tiers.learning.slice(0, learnTarget);
+  let mastPick  = shuffleInPlace([...tiers.mastered]).slice(0, mastTarget);
+
+  // Fill any deficit from other tiers (priority: struggling > learning > new > mastered)
+  let deficit = batchSize - newPick.length - strugPick.length - learnPick.length - mastPick.length;
+  if (deficit > 0) {
+    const extra = tiers.struggling.slice(strugPick.length, strugPick.length + deficit);
+    strugPick = [...strugPick, ...extra]; deficit -= extra.length;
+  }
+  if (deficit > 0) {
+    const extra = tiers.learning.slice(learnPick.length, learnPick.length + deficit);
+    learnPick = [...learnPick, ...extra]; deficit -= extra.length;
+  }
+  if (deficit > 0) {
+    const extra = tiers.new.slice(newPick.length, newPick.length + deficit);
+    newPick = [...newPick, ...extra]; deficit -= extra.length;
+  }
+  if (deficit > 0) {
+    const usedIds = new Set(mastPick.map(s => s.id));
+    const extra = shuffleInPlace(tiers.mastered.filter(s => !usedIds.has(s.id))).slice(0, deficit);
+    mastPick = [...mastPick, ...extra];
+  }
+
+  // Assemble: keep first 1–2 songs from new/struggling for intentional opening
+  const front = [];
+  if (newPick.length > 0)   front.push(newPick[0]);
+  if (strugPick.length > 0) front.push(strugPick[0]);
+  const frontIds = new Set(front.map(s => s.id));
+  const rest = shuffleInPlace(
+    [...newPick, ...strugPick, ...learnPick, ...mastPick].filter(s => !frontIds.has(s.id))
+  );
+  const queue = [...front, ...rest];
+
+  return json(res, 200, {
+    queue,
+    breakdown: {
+      new:       newPick.length,
+      struggling: strugPick.length,
+      learning:  learnPick.length,
+      mastered:  mastPick.length,
+    },
+    tierCounts: {
+      new:       tiers.new.length,
+      struggling: tiers.struggling.length,
+      learning:  tiers.learning.length,
+      mastered:  tiers.mastered.length,
+    },
+  });
 }
 
 function computeDueCounts(res) {
