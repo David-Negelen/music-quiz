@@ -262,6 +262,32 @@
           <button id="stats-load-more" class="btn-ghost btn-sm stats-load-more" style="display:none">Mehr laden</button>
         </div>
 
+        <!-- Song Map -->
+        <div class="stats-section" id="song-map-section">
+          <div class="stats-section-header">
+            <h3 class="stats-section-title">Song Map</h3>
+            <div style="display:flex;gap:6px">
+              <button id="song-map-expand-btn" class="btn-ghost btn-sm">Vergrößern</button>
+              <button id="song-map-toggle-btn" class="btn-ghost btn-sm">▾</button>
+            </div>
+          </div>
+          <div id="song-map-body" class="song-map-body">
+            <div class="song-map-wrap">
+              <canvas id="song-map-canvas" class="song-map-canvas"></canvas>
+              <div id="song-map-tooltip" class="song-map-tooltip" style="display:none"></div>
+              <div class="song-map-legend">
+                <div class="song-map-legend-heading">Beherrschung</div>
+                <div class="song-map-legend-row"><span class="song-map-legend-dot" style="background:#4ade80"></span>≥ 80%</div>
+                <div class="song-map-legend-row"><span class="song-map-legend-dot" style="background:#facc15"></span>50–79%</div>
+                <div class="song-map-legend-row"><span class="song-map-legend-dot" style="background:#f97316"></span>20–49%</div>
+                <div class="song-map-legend-row"><span class="song-map-legend-dot" style="background:#ef4444"></span>&lt; 20%</div>
+                <div class="song-map-legend-sep"></div>
+                <div class="song-map-legend-heading">Größe = Streak</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Database backups -->
         <div class="stats-section">
           <div class="stats-section-header">

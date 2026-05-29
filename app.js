@@ -1637,6 +1637,7 @@ async function renderStats() {
 
   state.historyOffset = 0;
   await loadSessionHistory(false);
+  songMap.init();
 }
 
 function drawTierDonut(canvas, tb, total) {
@@ -1810,6 +1811,442 @@ function drawAccuracyChart(canvas, sessions) {
     }
   }
 }
+
+// ── Song Map ──────────────────────────────────────────────────────────────────
+
+const songMap = (() => {
+  let nodes = null, edges = null, neighborSets = null;
+  let hoveredIdx = -1, selectedIdx = -1;
+  let pan = { x: 0, y: 0 }, zoom = 1;
+  let rafId = null, pulseT = 0;
+  let W = 0, H = 480;
+  let initialized = false;
+
+  const TIER_COLORS = ['#ef4444', '#f97316', '#facc15', '#4ade80'];
+  const EDGE_ALPHA  = [0, 0.04, 0.10, 0.18, 0.18];
+
+  function masteryPct(s) {
+    const a = (s.attempts_title | 0) + (s.attempts_artist | 0) + (s.attempts_year | 0);
+    if (!a) return -1;
+    return ((s.score_title | 0) + (s.score_artist | 0) + (s.score_year | 0)) / a;
+  }
+
+  function tier(s) {
+    const p = masteryPct(s);
+    if (p < 0)    return 0;
+    if (p >= 0.8) return 3;
+    if (p >= 0.5) return 2;
+    if (p >= 0.2) return 1;
+    return 0;
+  }
+
+  function isDue(s) {
+    const today = new Date().toISOString().slice(0, 10);
+    return ['title', 'artist', 'year'].some(f => { const d = s[`sr_due_${f}`]; return d && d <= today; });
+  }
+
+  function buildGraph(songs) {
+    nodes = songs.map(s => ({
+      title: s.title, artist: s.artist, year: s.year, genre: s.genre,
+      streak: s.streak,
+      sr_due_title: s.sr_due_title, sr_due_artist: s.sr_due_artist, sr_due_year: s.sr_due_year,
+      attempts_title: s.attempts_title, attempts_artist: s.attempts_artist, attempts_year: s.attempts_year,
+      score_title: s.score_title, score_artist: s.score_artist, score_year: s.score_year,
+      r:     Math.min(13, 4 + (s.streak || 0) * 0.9),
+      color: TIER_COLORS[tier(s)],
+      t:     tier(s),
+      due:   isDue(s),
+      vx: 0, vy: 0,
+      x: W / 2 + (Math.random() - 0.5) * W * 0.4,
+      y: H / 2 + (Math.random() - 0.5) * H * 0.4,
+    }));
+
+    const all = [];
+    for (let i = 0; i < nodes.length; i++) {
+      const a = songs[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = songs[j];
+        let m = 0;
+        if (a.genre && b.genre && a.genre === b.genre)             m++;
+        if (a.year && b.year && Math.abs((a.year|0)-(b.year|0)) <= 3) m++;
+        if (nodes[i].t === nodes[j].t)                             m++;
+        if ((a.streak || 0) > 0 && (b.streak || 0) > 0)           m++;
+        if (m) all.push({ source: i, target: j, strength: m });
+      }
+    }
+    all.sort((a, b) => b.strength - a.strength);
+    const cnt = new Int32Array(nodes.length);
+    edges = [];
+    for (const e of all) {
+      if (cnt[e.source] < 3 && cnt[e.target] < 3) {
+        edges.push(e);
+        cnt[e.source]++;
+        cnt[e.target]++;
+      }
+    }
+
+    neighborSets = nodes.map(() => new Set());
+    for (const e of edges) {
+      neighborSets[e.source].add(e.target);
+      neighborSets[e.target].add(e.source);
+    }
+  }
+
+  function simulateTick(alpha) {
+    for (let i = 0; i < nodes.length; i++) {
+      const ni = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const nj = nodes[j];
+        const dx = nj.x - ni.x, dy = nj.y - ni.y;
+        const d2 = Math.max(1, dx * dx + dy * dy);
+        const d  = Math.sqrt(d2);
+        const f  = alpha * 5000 / d2;
+        const fx = dx / d * f, fy = dy / d * f;
+        ni.vx -= fx; ni.vy -= fy;
+        nj.vx += fx; nj.vy += fy;
+      }
+    }
+    for (const e of edges) {
+      const ni = nodes[e.source], nj = nodes[e.target];
+      const dx = nj.x - ni.x, dy = nj.y - ni.y;
+      const d  = Math.sqrt(dx * dx + dy * dy) || 1;
+      const s  = (d - 80) * 0.07 * alpha * e.strength;
+      const fx = dx / d * s * 0.5, fy = dy / d * s * 0.5;
+      ni.vx += fx; ni.vy += fy;
+      nj.vx -= fx; nj.vy -= fy;
+    }
+    const gc = {};
+    for (const n of nodes) {
+      if (!n.genre) continue;
+      const g = gc[n.genre] = gc[n.genre] || { sx: 0, sy: 0, c: 0 };
+      g.sx += n.x; g.sy += n.y; g.c++;
+    }
+    for (const n of nodes) {
+      const g = n.genre && gc[n.genre];
+      if (g && g.c > 1) {
+        n.vx += (g.sx / g.c - n.x) * 0.012 * alpha;
+        n.vy += (g.sy / g.c - n.y) * 0.012 * alpha;
+      }
+    }
+    for (const n of nodes) {
+      n.vx += (W / 2 - n.x) * 0.0015 * alpha;
+      n.vy += (H / 2 - n.y) * 0.0015 * alpha;
+      n.vx *= 0.72; n.vy *= 0.72;
+      n.x += n.vx;
+      n.y += n.vy;
+    }
+  }
+
+  function drawProgress(canvas, progress) {
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.font = '12px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Berechne…', W / 2, H / 2 - 12);
+    const bw = 100;
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(W / 2 - bw / 2, H / 2 + 4, bw, 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(W / 2 - bw / 2, H / 2 + 4, bw * progress, 2);
+    ctx.restore();
+  }
+
+  async function simulate(canvas, ticks) {
+    let alpha = 1.0;
+    const decay = 1 - Math.pow(0.001, 1 / ticks);
+    const YIELD_EVERY = 8;
+    for (let t = 0; t < ticks; t++) {
+      alpha *= (1 - decay);
+      simulateTick(alpha);
+      if ((t + 1) % YIELD_EVERY === 0) {
+        drawProgress(canvas, (t + 1) / ticks);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+  }
+
+  function cssToWorld(cx, cy) {
+    return { x: (cx - pan.x) / zoom, y: (cy - pan.y) / zoom };
+  }
+
+  function hitTest(wx, wy) {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      const dx = wx - n.x, dy = wy - n.y;
+      if (dx * dx + dy * dy <= (n.r + 4) * (n.r + 4)) return i;
+    }
+    return -1;
+  }
+
+  function draw(canvas) {
+    if (!nodes) return;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.translate(pan.x, pan.y);
+    ctx.scale(zoom, zoom);
+
+    // Genre watermarks
+    const gc = {};
+    for (const n of nodes) {
+      if (!n.genre) continue;
+      const g = gc[n.genre] = gc[n.genre] || { sx: 0, sy: 0, c: 0 };
+      g.sx += n.x; g.sy += n.y; g.c++;
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const [genre, g] of Object.entries(gc)) {
+      if (g.c < 3) continue;
+      const fontSize = Math.max(16, Math.min(36, g.c * 0.9));
+      ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
+      ctx.fillStyle = 'rgba(255,255,255,0.09)';
+      ctx.fillText(genre.toUpperCase(), g.sx / g.c, g.sy / g.c);
+    }
+
+    // Edges
+    ctx.lineWidth = 0.6;
+    for (const e of edges) {
+      const ni = nodes[e.source], nj = nodes[e.target];
+      const baseA = EDGE_ALPHA[Math.min(e.strength, 4)];
+      const a = selectedIdx >= 0
+        ? ((e.source === selectedIdx || e.target === selectedIdx) ? baseA : baseA * 0.12)
+        : baseA;
+      ctx.strokeStyle = `rgba(180,190,255,${a})`;
+      ctx.beginPath();
+      ctx.moveTo(ni.x, ni.y);
+      ctx.lineTo(nj.x, nj.y);
+      ctx.stroke();
+    }
+
+    // Nodes
+    const pulse = Math.sin(pulseT * 0.05) * 0.5 + 0.5;
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const hov    = i === hoveredIdx;
+      const sel    = i === selectedIdx;
+      const dimmed = selectedIdx >= 0 && !sel && !hov && !neighborSets[selectedIdx].has(i);
+      ctx.globalAlpha = dimmed ? 0.18 : 1;
+
+      if (n.due && !dimmed) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 3 + pulse * 4, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${0.3 * pulse + 0.04})`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+
+      const haloR = n.r + (hov ? 8 : 5);
+      const grad  = ctx.createRadialGradient(n.x, n.y, n.r * 0.3, n.x, n.y, haloR);
+      grad.addColorStop(0, n.color + (hov ? 'cc' : '44'));
+      grad.addColorStop(1, n.color + '00');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, haloR, 0, Math.PI * 2);
+      ctx.fill();
+
+      const nr = hov ? n.r + 2 : n.r;
+      ctx.fillStyle = (hov || sel) ? '#ffffff' : n.color;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, nr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function showTooltip(tooltipEl, canvas, i, clientX, clientY) {
+    const n = nodes[i];
+    const pct = masteryPct(n);
+    const pctStr = pct < 0 ? '—' : Math.round(pct * 100) + '%';
+    const today = new Date().toISOString().slice(0, 10);
+    const dueLabels = { title: 'Titel', artist: 'Künstler', year: 'Jahr' };
+    const due = ['title', 'artist', 'year']
+      .filter(f => { const d = n[`sr_due_${f}`]; return d && d <= today; })
+      .map(f => dueLabels[f]);
+    tooltipEl.innerHTML =
+      `<div class="smt-title">${esc(n.title)}</div>` +
+      `<div class="smt-artist">${esc(n.artist)}</div>` +
+      `<div class="smt-row"><span class="smt-label">Beherrschung</span><span class="smt-val" style="color:${n.color}">${pctStr}</span></div>` +
+      `<div class="smt-row"><span class="smt-label">Streak</span><span class="smt-val">${n.streak || 0}</span></div>` +
+      (due.length ? `<div class="smt-due">Fällig: ${due.join(', ')}</div>` : '');
+    tooltipEl.style.display = 'block';
+    const wrapRect = canvas.parentElement.getBoundingClientRect();
+    let left = clientX - wrapRect.left + 14;
+    let top  = clientY - wrapRect.top  - 14;
+    if (left + 190 > wrapRect.width)  left = clientX - wrapRect.left - 190 - 14;
+    if (top  + 120 > wrapRect.height) top  = clientY - wrapRect.top  - 120 - 14;
+    tooltipEl.style.left = left + 'px';
+    tooltipEl.style.top  = top  + 'px';
+  }
+
+  async function init() {
+    if (initialized) return;
+    initialized = true;
+
+    const canvas  = document.getElementById('song-map-canvas');
+    const tooltip = document.getElementById('song-map-tooltip');
+    if (!canvas) { initialized = false; return; }
+
+    let songs;
+    try { songs = await fetch('/api/songs').then(r => r.json()); }
+    catch { initialized = false; return; }
+    if (!songs || !songs.length) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    W = canvas.clientWidth || 800;
+    H = 480;
+    canvas.style.height = H + 'px';
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+
+    buildGraph(songs);
+    const ticks = songs.length > 500 ? 200 : songs.length > 200 ? 250 : 300;
+    await simulate(canvas, ticks);
+
+    // Center the layout in the canvas
+    let cx = 0, cy = 0;
+    for (const n of nodes) { cx += n.x; cy += n.y; }
+    cx /= nodes.length; cy /= nodes.length;
+    const dx = W / 2 - cx, dy = H / 2 - cy;
+    for (const n of nodes) { n.x += dx; n.y += dy; }
+
+    // Interactions
+    let dragging = false, dragOrigin = null, panOrigin = null;
+
+    canvas.addEventListener('mousedown', e => {
+      dragging   = true;
+      dragOrigin = { x: e.clientX, y: e.clientY };
+      panOrigin  = { ...pan };
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+      const { x: wx, y: wy } = cssToWorld(cx, cy);
+
+      if (dragging && dragOrigin) {
+        pan.x = panOrigin.x + (e.clientX - dragOrigin.x);
+        pan.y = panOrigin.y + (e.clientY - dragOrigin.y);
+      }
+
+      const idx = hitTest(wx, wy);
+      if (idx !== hoveredIdx) {
+        hoveredIdx = idx;
+        if (idx >= 0 && !dragging) {
+          nodes[idx].vx += (Math.random() - 0.5) * 1.5;
+          nodes[idx].vy += (Math.random() - 0.5) * 1.5;
+          for (const ni of neighborSets[idx]) {
+            nodes[ni].vx += (Math.random() - 0.5) * 0.8;
+            nodes[ni].vy += (Math.random() - 0.5) * 0.8;
+          }
+        }
+      }
+
+      if (idx >= 0) {
+        showTooltip(tooltip, canvas, idx, e.clientX, e.clientY);
+        canvas.style.cursor = dragging ? 'grabbing' : 'pointer';
+      } else {
+        tooltip.style.display = 'none';
+        canvas.style.cursor = dragging ? 'grabbing' : 'grab';
+      }
+    });
+
+    canvas.addEventListener('mouseup', e => {
+      const moved = dragOrigin &&
+        (Math.abs(e.clientX - dragOrigin.x) > 4 || Math.abs(e.clientY - dragOrigin.y) > 4);
+      dragging   = false;
+      dragOrigin = null;
+      if (!moved) {
+        const rect = canvas.getBoundingClientRect();
+        const { x: wx, y: wy } = cssToWorld(e.clientX - rect.left, e.clientY - rect.top);
+        const idx = hitTest(wx, wy);
+        selectedIdx = idx === selectedIdx ? -1 : idx;
+      }
+      canvas.style.cursor = hoveredIdx >= 0 ? 'pointer' : 'grab';
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      hoveredIdx = -1;
+      dragging   = false;
+      tooltip.style.display = 'none';
+      canvas.style.cursor = 'grab';
+    });
+
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+      const factor  = e.deltaY < 0 ? 1.1 : 0.9;
+      const newZoom = Math.max(0.25, Math.min(6, zoom * factor));
+      const s = newZoom / zoom;
+      pan.x = cx - s * (cx - pan.x);
+      pan.y = cy - s * (cy - pan.y);
+      zoom  = newZoom;
+    }, { passive: false });
+
+    // RAF loop: handles pulsing rings + wobble decay
+    if (rafId) cancelAnimationFrame(rafId);
+    function loop() {
+      pulseT++;
+      for (const n of nodes) {
+        if (Math.abs(n.vx) > 0.01 || Math.abs(n.vy) > 0.01) {
+          n.vx *= 0.75; n.vy *= 0.75;
+          n.x = Math.max(n.r + 4, Math.min(W - n.r - 4, n.x + n.vx));
+          n.y = Math.max(n.r + 4, Math.min(H - n.r - 4, n.y + n.vy));
+        }
+      }
+      draw(canvas);
+      rafId = requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  function setupToggle() {
+    const toggleBtn = document.getElementById('song-map-toggle-btn');
+    const bodyEl    = document.getElementById('song-map-body');
+    const expandBtn = document.getElementById('song-map-expand-btn');
+    const section   = document.getElementById('song-map-section');
+    let collapsed = false;
+
+    toggleBtn?.addEventListener('click', () => {
+      collapsed = !collapsed;
+      bodyEl.classList.toggle('song-map-body--hidden', collapsed);
+      toggleBtn.textContent = collapsed ? '▸' : '▾';
+      if (!collapsed) init();
+    });
+
+    expandBtn?.addEventListener('click', () => {
+      const exp = section.classList.toggle('song-map--fullscreen');
+      expandBtn.textContent = exp ? 'Verkleinern' : 'Vergrößern';
+      requestAnimationFrame(() => {
+        const canvas = document.getElementById('song-map-canvas');
+        if (!canvas || !nodes) return;
+        const dpr = window.devicePixelRatio || 1;
+        W = canvas.clientWidth;
+        H = exp ? window.innerHeight - 100 : 480;
+        canvas.style.height = H + 'px';
+        canvas.width  = W * dpr;
+        canvas.height = H * dpr;
+        pan = { x: 0, y: 0 };
+        zoom = 1;
+        if (nodes) simulate(canvas, 40);
+      });
+    });
+  }
+
+  return { init, setupToggle };
+})();
 
 async function loadSessionHistory(append) {
   const container   = document.getElementById('stats-history');
@@ -2902,6 +3339,8 @@ async function init() {
   document.getElementById('stats-load-more').addEventListener('click', () => {
     loadSessionHistory(true);
   });
+
+  songMap.setupToggle();
 
   document.getElementById('backup-now-btn').addEventListener('click', async () => {
     const btn = document.getElementById('backup-now-btn');
