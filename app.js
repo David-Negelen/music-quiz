@@ -1857,8 +1857,8 @@ const songMap = (() => {
       t:     tier(s),
       due:   isDue(s),
       vx: 0, vy: 0,
-      x: W / 2 + (Math.random() - 0.5) * W * 0.4,
-      y: H / 2 + (Math.random() - 0.5) * H * 0.4,
+      x: W / 2 + (Math.random() - 0.5) * 80,
+      y: H / 2 + (Math.random() - 0.5) * 80,
     }));
 
     const all = [];
@@ -1929,8 +1929,6 @@ const songMap = (() => {
       }
     }
     for (const n of nodes) {
-      n.vx += (W / 2 - n.x) * 0.0015 * alpha;
-      n.vy += (H / 2 - n.y) * 0.0015 * alpha;
       n.vx *= 0.72; n.vy *= 0.72;
       n.x += n.vx;
       n.y += n.vy;
