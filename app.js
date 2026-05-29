@@ -1736,6 +1736,83 @@ async function toggleHistorySession(el) {
   }
 }
 
+// ── Backup UI ─────────────────────────────────────────────────────────────
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatBackupName(name) {
+  // backup-2024-01-15T12-30-00-manual.sqlite  →  15. Jan 2024, 12:30 · Manual
+  const m = name.match(/backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-\d{2}-([^.]+)\.sqlite/);
+  if (!m) return name;
+  const [, year, mon, day, hh, mm, label] = m;
+  const date = new Date(`${year}-${mon}-${day}T${hh}:${mm}:00`);
+  const fmt  = date.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = `${hh}:${mm}`;
+  const labelMap = { startup: 'Startup', daily: 'Täglich', manual: 'Manuell', 'pre-restore': 'Vor Restore' };
+  return `${fmt}, ${time} · ${labelMap[label] || label}`;
+}
+
+async function renderBackups() {
+  const container = document.getElementById('stats-backups');
+  if (!container) return;
+  container.innerHTML = '<p class="hint">Wird geladen…</p>';
+  let backups;
+  try {
+    const res = await fetch('/api/backups');
+    backups = await res.json();
+  } catch {
+    container.innerHTML = '<p class="hint">Backups konnten nicht geladen werden.</p>';
+    return;
+  }
+  if (!backups.length) {
+    container.innerHTML = '<p class="hint">Noch keine Backups vorhanden.</p>';
+    return;
+  }
+  container.innerHTML = `<table class="backup-table">
+    <thead><tr><th>Backup</th><th>Größe</th><th></th></tr></thead>
+    <tbody>${backups.map(b => `
+    <tr data-name="${esc(b.name)}">
+      <td class="backup-name">${esc(formatBackupName(b.name))}</td>
+      <td class="backup-size">${formatBytes(b.size)}</td>
+      <td class="backup-actions">
+        <a class="btn-ghost btn-sm" href="/api/backups/${encodeURIComponent(b.name)}" download="${esc(b.name)}">↓</a>
+        <button class="btn-ghost btn-sm backup-restore-btn" data-name="${esc(b.name)}">Wiederherstellen</button>
+        <button class="btn-ghost btn-sm backup-delete-btn" data-name="${esc(b.name)}">✕</button>
+      </td>
+    </tr>`).join('')}
+    </tbody></table>`;
+
+  container.querySelectorAll('.backup-restore-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Wirklich wiederherstellen?\n\n"${formatBackupName(btn.dataset.name)}"\n\nAktueller Stand wird als Pre-Restore-Backup gesichert. Der Server wird danach neu gestartet.`)) return;
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        await fetch(`/api/backups/${encodeURIComponent(btn.dataset.name)}/restore`, { method: 'POST' });
+        container.innerHTML = '<p class="hint" style="color:var(--accent)">Wiederhergestellt. Bitte Server neu starten (oder er startet automatisch neu).</p>';
+      } catch {
+        btn.disabled = false;
+        btn.textContent = 'Wiederherstellen';
+      }
+    });
+  });
+
+  container.querySelectorAll('.backup-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Backup löschen?\n\n"${formatBackupName(btn.dataset.name)}"`)) return;
+      await fetch(`/api/backups/${encodeURIComponent(btn.dataset.name)}`, { method: 'DELETE' });
+      btn.closest('tr').remove();
+      if (!container.querySelector('tr[data-name]')) {
+        container.innerHTML = '<p class="hint">Noch keine Backups vorhanden.</p>';
+      }
+    });
+  });
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────
 
 function esc(str) {
@@ -2393,7 +2470,7 @@ async function init() {
     btn.addEventListener('click', () => {
       showView(btn.dataset.view);
       if (btn.dataset.view === 'quiz-setup') { renderMasteryOverview(); renderGenreGrid(); }
-      if (btn.dataset.view === 'stats')      renderStats();
+      if (btn.dataset.view === 'stats')      { renderStats(); renderBackups(); }
     });
   });
 
@@ -2671,6 +2748,19 @@ async function init() {
     loadSessionHistory(true);
   });
 
+  document.getElementById('backup-now-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('backup-now-btn');
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      await fetch('/api/backups', { method: 'POST' });
+      await renderBackups();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Backup erstellen';
+    }
+  });
+
   // Autosave session on page close / refresh
   window.addEventListener('pagehide', () => {
     if (!state.currentSessionId) return;
@@ -2695,7 +2785,7 @@ async function init() {
     if (['library', 'stats', 'quiz-setup'].includes(hash)) {
       showView(hash);
       if (hash === 'quiz-setup') { renderMasteryOverview(); renderGenreGrid(); }
-      if (hash === 'stats') renderStats();
+      if (hash === 'stats') { renderStats(); renderBackups(); }
     }
   }
   window.addEventListener('hashchange', navigateToHash);

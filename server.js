@@ -15,10 +15,53 @@ try {
   }
 } catch {}
 
-const PORT   = process.env.PORT || 3000;
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'db.sqlite');
+const PORT      = process.env.PORT || 3000;
+const dbPath    = process.env.DB_PATH    || path.join(__dirname, 'db.sqlite');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(__dirname, 'backups');
+const MAX_BACKUPS = 14;
+
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-const db     = new Database(dbPath);
+fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+const db = new Database(dbPath);
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+
+// ── Backup helpers ─────────────────────────────────────────────────────────
+
+function listBackups() {
+  return fs.readdirSync(BACKUP_DIR)
+    .filter(f => f.endsWith('.sqlite'))
+    .map(f => {
+      const fp   = path.join(BACKUP_DIR, f);
+      const stat = fs.statSync(fp);
+      return { name: f, size: stat.size, created_at: stat.mtime.toISOString() };
+    })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+function pruneBackups() {
+  const all = listBackups();
+  for (const old of all.slice(MAX_BACKUPS)) {
+    try { fs.unlinkSync(path.join(BACKUP_DIR, old.name)); } catch {}
+  }
+}
+
+async function createBackup(label) {
+  const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const name = `backup-${ts}-${label}.sqlite`;
+  await db.backup(path.join(BACKUP_DIR, name));
+  pruneBackups();
+  return name;
+}
+
+// Startup backup (fire-and-forget)
+createBackup('startup').catch(e => console.error('Startup backup failed:', e.message));
+
+// Daily backup
+setInterval(() => {
+  createBackup('daily').catch(e => console.error('Daily backup failed:', e.message));
+}, 24 * 60 * 60 * 1000);
 
 // ── Schema ─────────────────────────────────────────────────────────────────
 
@@ -709,6 +752,45 @@ async function handleApi(req, res) {
     if (id && !sub && method === 'PATCH')                 return handlePatchSession(id, req, res);
     if (id && sub === 'results' && method === 'GET')      return json(res, 200, stmts.sessionResults.all(id));
     if (id && sub === 'results' && method === 'POST')     return handlePostSessionResult(id, req, res);
+  }
+
+  if (resource === 'backups') {
+    if (!id && method === 'GET') {
+      return json(res, 200, listBackups());
+    }
+    if (!id && method === 'POST') {
+      const name = await createBackup('manual');
+      return json(res, 201, { name });
+    }
+    if (id && !sub && method === 'GET') {
+      const name = path.basename(decodeURIComponent(id));
+      const fp   = path.join(BACKUP_DIR, name);
+      if (!name.endsWith('.sqlite') || !fs.existsSync(fp)) return json(res, 404, { error: 'Not found' });
+      const stat = fs.statSync(fp);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${name}"`,
+        'Content-Length': stat.size,
+      });
+      fs.createReadStream(fp).pipe(res);
+      return;
+    }
+    if (id && !sub && method === 'DELETE') {
+      const name = path.basename(decodeURIComponent(id));
+      const fp   = path.join(BACKUP_DIR, name);
+      if (!name.endsWith('.sqlite') || !fs.existsSync(fp)) return json(res, 404, { error: 'Not found' });
+      fs.unlinkSync(fp);
+      return json(res, 200, { ok: true });
+    }
+    if (id && sub === 'restore' && method === 'POST') {
+      const name = path.basename(decodeURIComponent(id));
+      const fp   = path.join(BACKUP_DIR, name);
+      if (!name.endsWith('.sqlite') || !fs.existsSync(fp)) return json(res, 404, { error: 'Not found' });
+      await createBackup('pre-restore');
+      json(res, 200, { ok: true });
+      setTimeout(() => { db.close(); fs.copyFileSync(fp, dbPath); process.exit(0); }, 300);
+      return;
+    }
   }
 
   json(res, 404, { error: 'Not found' });

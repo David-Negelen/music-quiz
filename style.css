@@ -1509,6 +1509,18 @@ details[open].review-group > summary.review-group-label::before { content: '▾ 
 
 .stats-load-more { align-self: flex-start; margin-top: 4px; }
 
+.stats-section-header { display: flex; align-items: center; justify-content: space-between; }
+.stats-section-header .stats-section-title { margin: 0; }
+
+.backup-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.backup-table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--text-3); padding: 0 8px 6px 0; letter-spacing: 0.3px; text-transform: uppercase; }
+.backup-table td { padding: 6px 8px 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+.backup-table tbody tr:last-child td { border-bottom: none; }
+.backup-name { color: var(--text-2); }
+.backup-size { color: var(--text-3); white-space: nowrap; width: 60px; }
+.backup-actions { text-align: right; white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
+.backup-actions a { text-decoration: none; }
+
 /* Hardest songs */
 .hardest-song-row {
   position: relative;
