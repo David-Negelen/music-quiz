@@ -1883,19 +1883,19 @@ async function renderSongNetwork(container) {
   const fx = new Float32Array(n);
   const fy = new Float32Array(n);
 
-  // Seed near tier centers
+  // Seed near tier centers (tight initial spread so nodes start away from edges)
   for (let i = 0; i < n; i++) {
     const t = TIERS[songs[i].tier] || { cx: W / 2, cy: H / 2 };
-    px[i] = t.cx + (Math.random() - 0.5) * 260;
-    py[i] = t.cy + (Math.random() - 0.5) * 160;
+    px[i] = Math.max(20, Math.min(W - 20, t.cx + (Math.random() - 0.5) * 140));
+    py[i] = Math.max(20, Math.min(H - 20, t.cy + (Math.random() - 0.5) * 100));
   }
 
-  const REPULSION  = 480;
-  const CUTOFF_SQ  = 175 * 175;
+  const REPULSION  = 360;
+  const CUTOFF_SQ  = 160 * 160;
   const SPRING_K   = 0.016;
   const SPRING_LEN = 52;
-  const GRAVITY    = 0.015;
-  const DAMPING    = 0.86;
+  const GRAVITY    = 0.028;
+  const DAMPING    = 0.84;
 
   function step(iters) {
     for (let t = 0; t < iters; t++) {
@@ -1932,12 +1932,18 @@ async function renderSongNetwork(container) {
         fy[i] += (t.cy - py[i]) * GRAVITY;
       }
 
-      // Integrate with damping
+      // Integrate with damping + boundary bounce
       for (let i = 0; i < n; i++) {
         vx[i] = (vx[i] + fx[i]) * DAMPING;
         vy[i] = (vy[i] + fy[i]) * DAMPING;
-        px[i] = Math.max(8, Math.min(W - 8, px[i] + vx[i]));
-        py[i] = Math.max(8, Math.min(H - 8, py[i] + vy[i]));
+        let nx = px[i] + vx[i];
+        let ny = py[i] + vy[i];
+        if (nx < 14)      { nx = 14;      vx[i] = Math.abs(vx[i]) * 0.25; }
+        else if (nx > W - 14) { nx = W - 14; vx[i] = -Math.abs(vx[i]) * 0.25; }
+        if (ny < 14)      { ny = 14;      vy[i] = Math.abs(vy[i]) * 0.25; }
+        else if (ny > H - 14) { ny = H - 14; vy[i] = -Math.abs(vy[i]) * 0.25; }
+        px[i] = nx;
+        py[i] = ny;
       }
     }
   }
