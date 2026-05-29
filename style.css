@@ -1946,42 +1946,6 @@ details[open].review-group > summary.review-group-label::before { content: '▾ 
 ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
-/* ── Song Network ───────────────────────────────────────────────────────────── */
-
-.network-wrap    { position: relative; }
-.network-canvas  { display: block; width: 100%; border-radius: 10px; cursor: crosshair; }
-.network-loading { padding: 48px 0; text-align: center; color: var(--text-3); font-size: 13px; }
-
-.network-mode-bar { display: flex; gap: 6px; margin-bottom: 10px; }
-.network-mode-btn {
-  padding: 5px 13px;
-  border-radius: 20px;
-  border: 1px solid var(--surface-3);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-.network-mode-btn:hover  { background: var(--surface-3); color: var(--text); }
-.network-mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-.network-tooltip {
-  position: absolute;
-  pointer-events: none;
-  background: var(--surface-2);
-  border: 1px solid var(--surface-3);
-  border-radius: 7px;
-  padding: 8px 11px;
-  font-size: 12px;
-  z-index: 10;
-  min-width: 130px;
-  max-width: 200px;
-}
-.nt-title  { font-weight: 600; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nt-artist { color: var(--text-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nt-meta   { color: var(--text-3); margin-top: 4px; font-size: 11px; }
-
 /* ── Misc legacy ────────────────────────────────────────────────────────────── */
 
 .mastery-row { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -140,19 +140,6 @@ for (const [col, def] of perFieldSRCols) {
 // Migrate: add genre column
 try { db.prepare('ALTER TABLE songs ADD COLUMN genre TEXT DEFAULT NULL').run(); } catch {}
 
-// Migrate: 2D embedding for the Songkarte
-try { db.prepare('ALTER TABLE songs ADD COLUMN embed_x REAL DEFAULT NULL').run(); } catch {}
-try { db.prepare('ALTER TABLE songs ADD COLUMN embed_y REAL DEFAULT NULL').run(); } catch {}
-
-// Bump LAYOUT_VERSION to force a full recompute after algorithm changes
-db.prepare('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, val TEXT)').run();
-const LAYOUT_VERSION = '3';
-const _lv = db.prepare("SELECT val FROM kv WHERE key='layout_v'").get();
-if (!_lv || _lv.val !== LAYOUT_VERSION) {
-  db.prepare('UPDATE songs SET embed_x=NULL, embed_y=NULL').run();
-  db.prepare("INSERT OR REPLACE INTO kv(key,val) VALUES('layout_v',?)").run(LAYOUT_VERSION);
-}
-
 // Migrate: track which storefront the preview was fetched from
 try { db.prepare('ALTER TABLE songs ADD COLUMN preview_country TEXT DEFAULT NULL').run(); } catch {}
 
@@ -522,155 +509,6 @@ async function handlePostSessionResult(sessionId, req, res) {
   return json(res, 201, { ok: true });
 }
 
-// ── Songkarte layout engine ───────────────────────────────────────────────────
-// Seeded from audio features (decade, artist, genre, knowledge), refined by a
-// sparse force simulation. Positions stored in embed_x/embed_y and recomputed
-// only when songs are missing embeddings.
-
-const _KT = `(CASE WHEN attempts_title  > 0 AND score_title  >= 1 AND CAST(score_title  AS REAL)/attempts_title  >= 0.5 THEN 1 ELSE 0 END)`;
-const _KA = `(CASE WHEN attempts_artist > 0 AND score_artist >= 1 AND CAST(score_artist AS REAL)/attempts_artist >= 0.5 THEN 1 ELSE 0 END)`;
-const _KY = `(CASE WHEN attempts_year   > 0 AND score_year   >= 1 AND CAST(score_year   AS REAL)/attempts_year   >= 0.5 THEN 1 ELSE 0 END)`;
-
-function stableHash(str) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-  return h;
-}
-function hashNorm(str) { return stableHash(str) / 0xFFFFFFFF; }
-
-function computeNetworkLayout() {
-  const rows = db.prepare(`
-    SELECT id, artist, year, genre, ${_KT}+${_KA}+${_KY} as kn
-    FROM songs WHERE attempts_title > 0
-  `).all();
-  const n = rows.length;
-  if (n < 3) return;
-  console.log(`[songkarte] computing layout for ${n} songs…`);
-  const t0 = Date.now();
-
-  const px = new Float64Array(n), py = new Float64Array(n);
-  const vx = new Float64Array(n), vy = new Float64Array(n);
-  const fx = new Float64Array(n), fy = new Float64Array(n);
-
-  // Feature-based seed: x=time, y=genre+artist space
-  for (let i = 0; i < n; i++) {
-    const s = rows[i];
-    const yr    = parseInt(s.year, 10) || 1990;
-    const decNorm = Math.max(0, Math.min(1, (yr - 1955) / 65));
-    const aHx   = hashNorm(s.artist);
-    const aHy   = hashNorm(s.artist + '~');
-    const gHx   = hashNorm(s.genre  || '');
-    const gHy   = hashNorm((s.genre || '') + '~');
-    const idH   = hashNorm(String(s.id));
-    const idH2  = hashNorm(String(s.id) + '~');
-    const kn    = (s.kn || 0) / 3;
-
-    // x: mostly decade (natural time axis), nudged by artist+genre+song id
-    px[i] = Math.max(0.02, Math.min(0.98, 0.54*decNorm + 0.22*aHx + 0.14*gHx + 0.06*idH  + 0.04*kn));
-    // y: genre+artist signature (no time), kn adds a subtle learning gradient
-    py[i] = Math.max(0.02, Math.min(0.98, 0.44*gHy   + 0.34*aHy  + 0.13*kn  + 0.09*idH2));
-  }
-
-  // Build sparse springs: same-artist (tight), same-genre nearby decade (loose)
-  const springs = [];
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const a = rows[i], b = rows[j];
-      const decA   = Math.floor((parseInt(a.year, 10) || 1990) / 10);
-      const decB   = Math.floor((parseInt(b.year, 10) || 1990) / 10);
-      const ddiff  = Math.abs(decA - decB);
-      const sameAr = a.artist === b.artist;
-      const sameGe = !!(a.genre && a.genre === b.genre);
-
-      if (sameAr) {
-        springs.push(i, j, 0.025, 0.28);        // very tight artist cluster
-      } else if (sameGe && ddiff === 0) {
-        springs.push(i, j, 0.07,  0.10);        // same genre+decade
-      } else if (sameGe && ddiff <= 2) {
-        springs.push(i, j, 0.07 + ddiff*0.025, 0.06); // same genre, adjacent decades
-      }
-    }
-  }
-
-  // Run force simulation (spring data packed as flat quads: [i, j, rest, str, …])
-  const REPULSION = 4.2e-5, CUTOFF_SQ = 0.21 * 0.21, DAMPING = 0.84;
-  for (let iter = 0; iter < 300; iter++) {
-    fx.fill(0); fy.fill(0);
-
-    // Repulsion (O(n²) with early-exit on cutoff)
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const dx = px[j]-px[i], dy = py[j]-py[i];
-        const d2 = dx*dx + dy*dy;
-        if (d2 > CUTOFF_SQ || d2 < 1e-12) continue;
-        const inv = 1 / Math.sqrt(d2);
-        const f   = REPULSION / d2;
-        fx[i] -= dx*inv*f; fy[i] -= dy*inv*f;
-        fx[j] += dx*inv*f; fy[j] += dy*inv*f;
-      }
-    }
-
-    // Springs (attraction only — repulsion handles separation)
-    for (let k = 0; k < springs.length; k += 4) {
-      const i = springs[k], j = springs[k+1], rest = springs[k+2], str = springs[k+3];
-      const dx = px[j]-px[i], dy = py[j]-py[i];
-      const d  = Math.sqrt(dx*dx + dy*dy) || 1e-9;
-      if (d <= rest) continue;
-      const f  = str * (d - rest) / d;
-      fx[i] += dx*f; fy[i] += dy*f;
-      fx[j] -= dx*f; fy[j] -= dy*f;
-    }
-
-    // Gentle centering force — prevents unbounded drift without distorting clusters
-    for (let i = 0; i < n; i++) {
-      fx[i] += (0.5 - px[i]) * 0.0018;
-      fy[i] += (0.5 - py[i]) * 0.0018;
-    }
-
-    // Integrate — NO boundary clamp (we min-max normalize after simulation)
-    for (let i = 0; i < n; i++) {
-      vx[i] = (vx[i] + fx[i]) * DAMPING;
-      vy[i] = (vy[i] + fy[i]) * DAMPING;
-      px[i] += vx[i];
-      py[i] += vy[i];
-    }
-  }
-
-  // Normalize output to [0,1] so the full canvas is used after client min-max scaling
-  let mnX = Infinity, mxX = -Infinity, mnY = Infinity, mxY = -Infinity;
-  for (let i = 0; i < n; i++) {
-    if (px[i] < mnX) mnX = px[i]; if (px[i] > mxX) mxX = px[i];
-    if (py[i] < mnY) mnY = py[i]; if (py[i] > mxY) mxY = py[i];
-  }
-  const rX = Math.max(mxX - mnX, 1e-6), rY = Math.max(mxY - mnY, 1e-6);
-  for (let i = 0; i < n; i++) { px[i] = (px[i]-mnX)/rX; py[i] = (py[i]-mnY)/rY; }
-
-  // Persist
-  const upd = db.prepare('UPDATE songs SET embed_x = ?, embed_y = ? WHERE id = ?');
-  db.transaction(() => rows.forEach((s, i) => upd.run(px[i], py[i], s.id)))();
-  console.log(`[songkarte] layout done in ${Date.now()-t0}ms`);
-}
-
-function handleGetSongNetwork(res) {
-  // Lazy: compute any missing embeddings before serving
-  const { c } = db.prepare(
-    'SELECT COUNT(*) as c FROM songs WHERE attempts_title > 0 AND embed_x IS NULL'
-  ).get();
-  if (c > 0) computeNetworkLayout();
-
-  const rows = db.prepare(`
-    SELECT id, title, artist, year, genre, embed_x, embed_y,
-      ${_KT}+${_KA}+${_KY}                                                   AS kn,
-      CASE ${_KT}+${_KA}+${_KY}
-        WHEN 0 THEN 'k0' WHEN 1 THEN 'k1' WHEN 2 THEN 'k2' ELSE 'k3'
-      END                                                                      AS tier
-    FROM songs
-    WHERE attempts_title > 0 AND embed_x IS NOT NULL
-    ORDER BY artist
-  `).all();
-  return json(res, 200, rows);
-}
-
 function handleGetStats(res) {
   const totalSongs = db.prepare('SELECT COUNT(*) as n FROM songs').get().n;
 
@@ -934,7 +772,6 @@ async function handleApi(req, res) {
     if (!id && method === 'GET')                          return json(res, 200, stmts.allSongs.all());
     if (!id && method === 'POST')                         return handlePostSong(req, res);
     if (id === 'queue'   && method === 'GET')              return handleGetQueue(req, res);
-    if (id === 'network' && method === 'GET')             return handleGetSongNetwork(res);
     if (id && !sub && method === 'DELETE')                { stmts.deleteSong.run(id); return json(res, 200, { ok: true }); }
     if (id && !sub && method === 'PATCH')                 return handlePatchSong(id, req, res);
     if (id && sub === 'sr' && method === 'PATCH')         return handlePatchSongSR(id, req, res);
