@@ -1996,8 +1996,8 @@ async function renderSongNetwork(container) {
       const sameArtist = hiArtist && s.artist === hiArtist && !isHi;
       const r = isHi ? 5.5 : sameArtist ? 4 : 3;
 
-      // Glow halo for mastered / hovered
-      if (s.tier === 'mastered' || isHi) {
+      // Glow halo for fully-known / hovered
+      if (s.tier === 'k3' || isHi) {
         ctx.beginPath();
         ctx.arc(px[i], py[i], r + (isHi ? 5 : 3), 0, Math.PI * 2);
         ctx.fillStyle = isHi ? tier.color + '44' : tier.glow;
