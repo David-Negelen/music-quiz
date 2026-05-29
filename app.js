@@ -1865,14 +1865,15 @@ async function renderSongNetwork(container) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  // Tier config: gravity center + colors
+  // Tier config: gravity center + colors (diamond: 0 known=bottom, 3 known=top)
   const TIERS = {
-    struggling: { color: '#d45555', glow: 'rgba(212,85,85,0.18)',  cx: W * 0.26, cy: H * 0.76 },
-    learning:   { color: '#e8a020', glow: 'rgba(232,160,32,0.18)', cx: W * 0.74, cy: H * 0.76 },
-    mastered:   { color: '#52c48a', glow: 'rgba(82,196,138,0.18)', cx: W * 0.50, cy: H * 0.22 },
+    k0: { color: '#b03a3a', glow: 'rgba(176,58,58,0.18)',   cx: W * 0.50, cy: H * 0.78 },
+    k1: { color: '#c87820', glow: 'rgba(200,120,32,0.18)',  cx: W * 0.20, cy: H * 0.48 },
+    k2: { color: '#5a85d4', glow: 'rgba(90,133,212,0.18)',  cx: W * 0.80, cy: H * 0.48 },
+    k3: { color: '#52c48a', glow: 'rgba(82,196,138,0.18)',  cx: W * 0.50, cy: H * 0.18 },
   };
-  const LABELS = { struggling: 'Kämpfend', learning: 'Lernend', mastered: 'Gemeistert' };
-  const LABEL_Y = { struggling: H * 0.92, learning: H * 0.92, mastered: H * 0.07 };
+  const LABELS = { k0: '0 gewusst', k1: '1 gewusst', k2: '2 gewusst', k3: '3 gewusst' };
+  const LABEL_Y = { k0: H * 0.94, k1: H * 0.52, k2: H * 0.52, k3: H * 0.07 };
 
   // Node physics arrays
   const n  = songs.length;
@@ -2007,7 +2008,7 @@ async function renderSongNetwork(container) {
       ctx.beginPath();
       ctx.arc(px[i], py[i], r, 0, Math.PI * 2);
       ctx.fillStyle    = tier.color;
-      ctx.globalAlpha  = isHi ? 1 : s.tier === 'mastered' ? 0.85 : s.tier === 'learning' ? 0.68 : 0.55;
+      ctx.globalAlpha  = isHi ? 1 : s.tier === 'k3' ? 0.90 : s.tier === 'k2' ? 0.78 : s.tier === 'k1' ? 0.65 : 0.52;
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -2032,11 +2033,12 @@ async function renderSongNetwork(container) {
 
     if (best >= 0) {
       const s   = songs[best];
-      const col = (TIERS[s.tier] || {}).color || '#888';
+      const col  = (TIERS[s.tier] || {}).color || '#888';
+      const known = s.kn != null ? s.kn : { k0: 0, k1: 1, k2: 2, k3: 3 }[s.tier] ?? '?';
       tooltip.innerHTML = `
         <div class="nt-title">${escapeHtml(s.title)}</div>
         <div class="nt-artist">${escapeHtml(s.artist)}</div>
-        <div class="nt-meta"><span style="color:${col}">${LABELS[s.tier] || s.tier}</span>&nbsp;·&nbsp;${Math.round((s.accuracy || 0) * 100)}%</div>
+        <div class="nt-meta"><span style="color:${col}">${known}/3 gewusst</span></div>
       `;
       tooltip.hidden = false;
       tooltip.style.left = Math.min(mx + 14, W - 155) + 'px';

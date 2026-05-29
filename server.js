@@ -510,19 +510,18 @@ async function handlePostSessionResult(sessionId, req, res) {
 }
 
 function handleGetSongNetwork(res) {
-  const ACC = `CAST(COALESCE(score_title,0)+COALESCE(score_artist,0)+COALESCE(score_year,0) AS REAL) / (attempts_title * 3)`;
-  const STRUGGLING = `(COALESCE(last_result,0) <= 1 OR ${ACC} < 0.50)`;
+  const KNOWN_TITLE  = `(CASE WHEN attempts_title  > 0 AND score_title  >= 1 AND CAST(score_title  AS REAL)/attempts_title  >= 0.5 THEN 1 ELSE 0 END)`;
+  const KNOWN_ARTIST = `(CASE WHEN attempts_artist > 0 AND score_artist >= 1 AND CAST(score_artist AS REAL)/attempts_artist >= 0.5 THEN 1 ELSE 0 END)`;
+  const KNOWN_YEAR   = `(CASE WHEN attempts_year   > 0 AND score_year   >= 1 AND CAST(score_year   AS REAL)/attempts_year   >= 0.5 THEN 1 ELSE 0 END)`;
   const rows = db.prepare(`
-    SELECT id, title, artist, attempts_title,
-      CASE
-        WHEN (${STRUGGLING}) THEN 'struggling'
-        WHEN ${ACC} < 0.80   THEN 'learning'
-        ELSE                      'mastered'
-      END as tier,
-      ROUND(${ACC}, 3) as accuracy
-    FROM songs
-    WHERE attempts_title > 0
-    ORDER BY artist, ${ACC}
+    SELECT id, title, artist, attempts_title, kn,
+      CASE kn WHEN 0 THEN 'k0' WHEN 1 THEN 'k1' WHEN 2 THEN 'k2' ELSE 'k3' END as tier,
+      ROUND(kn / 3.0, 3) as accuracy
+    FROM (
+      SELECT *, ${KNOWN_TITLE} + ${KNOWN_ARTIST} + ${KNOWN_YEAR} as kn
+      FROM songs WHERE attempts_title > 0
+    )
+    ORDER BY artist, kn
   `).all();
   return json(res, 200, rows);
 }
