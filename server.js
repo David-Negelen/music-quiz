@@ -110,6 +110,11 @@ for (const [col, def] of [
   try { db.prepare(`ALTER TABLE songs ADD COLUMN ${col} ${def}`).run(); } catch {}
 }
 
+// Migrate: store actual guesses in session_results
+for (const col of ['guess_title', 'guess_artist', 'guess_year']) {
+  try { db.prepare(`ALTER TABLE session_results ADD COLUMN ${col} TEXT DEFAULT NULL`).run(); } catch {}
+}
+
 // Migrate: backfill tier fields for songs that already have session history
 try {
   db.prepare(`
@@ -255,8 +260,8 @@ const stmts = {
     ORDER BY sr.answered_at
   `),
   insertResult: db.prepare(`
-    INSERT INTO session_results (session_id, song_id, got_title, got_artist, got_year)
-    VALUES (@session_id, @song_id, @got_title, @got_artist, @got_year)
+    INSERT INTO session_results (session_id, song_id, got_title, got_artist, got_year, guess_title, guess_artist, guess_year)
+    VALUES (@session_id, @song_id, @got_title, @got_artist, @got_year, @guess_title, @guess_artist, @guess_year)
   `),
 };
 
@@ -444,7 +449,10 @@ async function handlePostSessionResult(sessionId, req, res) {
   const gotTitle  = body.got_title  ? 1 : 0;
   const gotArtist = body.got_artist ? 1 : 0;
   const gotYear   = body.got_year   ? 1 : 0;
-  stmts.insertResult.run({ session_id: parseInt(sessionId), song_id: songId, got_title: gotTitle, got_artist: gotArtist, got_year: gotYear });
+  const guessTitle  = body.guess_title  != null ? String(body.guess_title)  : null;
+  const guessArtist = body.guess_artist != null ? String(body.guess_artist) : null;
+  const guessYear   = body.guess_year   != null ? String(body.guess_year)   : null;
+  stmts.insertResult.run({ session_id: parseInt(sessionId), song_id: songId, got_title: gotTitle, got_artist: gotArtist, got_year: gotYear, guess_title: guessTitle, guess_artist: guessArtist, guess_year: guessYear });
   const today = new Date().toISOString().split('T')[0];
   applySRUpdate(songId, 'title',  gotTitle,  today);
   applySRUpdate(songId, 'artist', gotArtist, today);
@@ -534,7 +542,8 @@ function handleGetStats(res) {
 
 function handleGetSongHistory(id, res) {
   const rows = db.prepare(`
-    SELECT sr.answered_at, sr.got_title, sr.got_artist, sr.got_year, sr.session_id
+    SELECT sr.answered_at, sr.got_title, sr.got_artist, sr.got_year,
+           sr.guess_title, sr.guess_artist, sr.guess_year, sr.session_id
     FROM session_results sr
     JOIN sessions s ON s.id = sr.session_id
     WHERE sr.song_id = ?

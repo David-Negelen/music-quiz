@@ -1828,26 +1828,21 @@ details[open].review-group > summary.review-group-label::before { content: '▾ 
   padding: 0 6px 6px 0; letter-spacing: 0.3px; text-transform: uppercase;
 }
 .shm-table th:first-child { padding-left: 0; }
-.shm-table th:not(:first-child) { text-align: center; }
 .shm-table td { padding: 5px 6px 5px 0; border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: middle; }
-.shm-table td:not(:first-child) { text-align: center; }
 .shm-table tbody tr:last-child td { border-bottom: none; }
 
-.shm-date { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.shm-date { font-size: 12px; color: var(--text-3); white-space: nowrap; padding-right: 10px; }
 
-.result-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 16px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
+.shm-guess {
+  font-size: 12px;
+  padding-right: 10px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.pill-correct { background: rgba(82,196,138,0.10); color: var(--success); }
-.pill-wrong   { background: rgba(255,255,255,0.05); color: var(--text-3); }
+.shm-guess.pill-correct { color: var(--success); }
+.shm-guess.pill-wrong   { color: var(--text-3); }
 
 /* ── Animations ─────────────────────────────────────────────────────────────── */
 

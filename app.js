@@ -1303,7 +1303,7 @@ function handleAnswer() {
   q.submitted = true;
 
   hideAllDropdowns();
-  stopAudio();
+  audio.pause();
 
   const values = {
     title: document.getElementById('answer-title').value.trim(),
@@ -1321,7 +1321,7 @@ function handleAnswer() {
   state.quizScore += correctCount * 10;
   if (correctCount === 3) { state.quizStreak++; fireConfetti(); } else { state.quizStreak = 0; }
   updateStreakDisplay();
-  state.quizAnswers.push({ song: q.song, correct });
+  state.quizAnswers.push({ song: q.song, correct, values });
 
   // Keep in-memory lastResult current so tier counts on the setup screen stay accurate
   q.song.lastResult = correctCount;
@@ -1388,10 +1388,13 @@ async function advanceQuiz() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          song_id:    q.song.id,
-          got_title:  ans.correct.title  ? 1 : 0,
-          got_artist: ans.correct.artist ? 1 : 0,
-          got_year:   ans.correct.year   ? 1 : 0,
+          song_id:      q.song.id,
+          got_title:    ans.correct.title  ? 1 : 0,
+          got_artist:   ans.correct.artist ? 1 : 0,
+          got_year:     ans.correct.year   ? 1 : 0,
+          guess_title:  ans.values ? ans.values.title  : null,
+          guess_artist: ans.values ? ans.values.artist : null,
+          guess_year:   ans.values ? ans.values.year   : null,
         }),
       }).catch(() => {});
     }
@@ -1998,6 +2001,10 @@ async function runBulkImport(entries) {
 
 // ── Song History Modal ────────────────────────────────────────────────────
 
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function utcDate(raw) {
   return new Date(raw.includes('Z') ? raw : raw.replace(' ', 'T') + 'Z');
 }
@@ -2062,13 +2069,20 @@ function renderSongHistoryBody(history) {
   svg += '</svg>';
 
   // Table
-  const pill = got => `<span class="result-pill ${got ? 'pill-correct' : 'pill-wrong'}">${got ? '✓' : '✗'}</span>`;
+  const guessCell = (got, guess) => {
+    const cls = got ? 'pill-correct' : 'pill-wrong';
+    const icon = got ? '✓' : '✗';
+    const text = guess ? escapeHtml(guess) : '—';
+    return `<td class="shm-guess ${cls}">${icon} ${text}</td>`;
+  };
   let table = `<table class="shm-table">
     <thead><tr><th>Datum</th><th>Titel</th><th>Künstler</th><th>Jahr</th></tr></thead><tbody>`;
   for (const h of history) {
     table += `<tr>
       <td class="shm-date">${formatHistoryDate(h.answered_at)}</td>
-      <td>${pill(h.got_title)}</td><td>${pill(h.got_artist)}</td><td>${pill(h.got_year)}</td>
+      ${guessCell(h.got_title,  h.guess_title)}
+      ${guessCell(h.got_artist, h.guess_artist)}
+      ${guessCell(h.got_year,   h.guess_year)}
     </tr>`;
   }
   table += '</tbody></table>';
