@@ -509,6 +509,24 @@ async function handlePostSessionResult(sessionId, req, res) {
   return json(res, 201, { ok: true });
 }
 
+function handleGetSongNetwork(res) {
+  const ACC = `CAST(COALESCE(score_title,0)+COALESCE(score_artist,0)+COALESCE(score_year,0) AS REAL) / (attempts_title * 3)`;
+  const STRUGGLING = `(COALESCE(last_result,0) <= 1 OR ${ACC} < 0.50)`;
+  const rows = db.prepare(`
+    SELECT id, title, artist, attempts_title,
+      CASE
+        WHEN (${STRUGGLING}) THEN 'struggling'
+        WHEN ${ACC} < 0.80   THEN 'learning'
+        ELSE                      'mastered'
+      END as tier,
+      ROUND(${ACC}, 3) as accuracy
+    FROM songs
+    WHERE attempts_title > 0
+    ORDER BY artist, ${ACC}
+  `).all();
+  return json(res, 200, rows);
+}
+
 function handleGetStats(res) {
   const totalSongs = db.prepare('SELECT COUNT(*) as n FROM songs').get().n;
 
@@ -771,7 +789,8 @@ async function handleApi(req, res) {
   if (resource === 'songs') {
     if (!id && method === 'GET')                          return json(res, 200, stmts.allSongs.all());
     if (!id && method === 'POST')                         return handlePostSong(req, res);
-    if (id === 'queue' && method === 'GET')               return handleGetQueue(req, res);
+    if (id === 'queue'   && method === 'GET')              return handleGetQueue(req, res);
+    if (id === 'network' && method === 'GET')             return handleGetSongNetwork(res);
     if (id && !sub && method === 'DELETE')                { stmts.deleteSong.run(id); return json(res, 200, { ok: true }); }
     if (id && !sub && method === 'PATCH')                 return handlePatchSong(id, req, res);
     if (id && sub === 'sr' && method === 'PATCH')         return handlePatchSongSR(id, req, res);

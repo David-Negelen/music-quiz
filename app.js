@@ -1605,6 +1605,9 @@ async function renderStats() {
   // Accuracy line chart
   setTimeout(() => drawAccuracyChart(document.getElementById('stats-chart'), data.recentSessions), 0);
 
+  // Song constellation (fires async, shows loading state while computing)
+  renderSongNetwork(document.getElementById('stats-network'));
+
   // Hardest songs
   if (data.hardestSongs.length) {
     document.getElementById('stats-hardest').innerHTML = data.hardestSongs.map(s => {
@@ -1809,6 +1812,239 @@ function drawAccuracyChart(canvas, sessions) {
       ctx.fill();
     }
   }
+}
+
+async function renderSongNetwork(container) {
+  if (!container) return;
+  container.innerHTML = '<div class="network-loading">Netzwerk wird berechnet…</div>';
+
+  let songs;
+  try {
+    songs = await fetch('/api/songs/network').then(r => r.json());
+  } catch {
+    container.innerHTML = '<p class="hint" style="padding:8px 0">Netzwerk konnte nicht geladen werden.</p>';
+    return;
+  }
+
+  if (songs.length < 2) {
+    container.innerHTML = '<p class="hint" style="padding:8px 0">Spiel erst ein paar Songs.</p>';
+    return;
+  }
+
+  // Artist chains: consecutive pairs sorted by accuracy (server sends ORDER BY artist, accuracy)
+  const artistGroups = {};
+  songs.forEach((s, i) => {
+    if (!artistGroups[s.artist]) artistGroups[s.artist] = [];
+    artistGroups[s.artist].push(i);
+  });
+  const edges = [];
+  for (const group of Object.values(artistGroups)) {
+    for (let k = 0; k < group.length - 1; k++) edges.push([group[k], group[k + 1]]);
+  }
+
+  // DOM: wrap div for tooltip positioning
+  const wrap = document.createElement('div');
+  wrap.style.position = 'relative';
+  const canvas  = document.createElement('canvas');
+  canvas.className = 'network-canvas';
+  const tooltip = document.createElement('div');
+  tooltip.className = 'network-tooltip';
+  tooltip.hidden = true;
+  wrap.appendChild(canvas);
+  wrap.appendChild(tooltip);
+  container.innerHTML = '';
+  container.appendChild(wrap);
+
+  const W   = container.clientWidth || 620;
+  const H   = 380;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Tier config: gravity center + colors
+  const TIERS = {
+    struggling: { color: '#d45555', glow: 'rgba(212,85,85,0.18)',  cx: W * 0.26, cy: H * 0.76 },
+    learning:   { color: '#e8a020', glow: 'rgba(232,160,32,0.18)', cx: W * 0.74, cy: H * 0.76 },
+    mastered:   { color: '#52c48a', glow: 'rgba(82,196,138,0.18)', cx: W * 0.50, cy: H * 0.22 },
+  };
+  const LABELS = { struggling: 'Kämpfend', learning: 'Lernend', mastered: 'Gemeistert' };
+  const LABEL_Y = { struggling: H * 0.92, learning: H * 0.92, mastered: H * 0.07 };
+
+  // Node physics arrays
+  const n  = songs.length;
+  const px = new Float32Array(n);
+  const py = new Float32Array(n);
+  const vx = new Float32Array(n);
+  const vy = new Float32Array(n);
+  const fx = new Float32Array(n);
+  const fy = new Float32Array(n);
+
+  // Seed near tier centers
+  for (let i = 0; i < n; i++) {
+    const t = TIERS[songs[i].tier] || { cx: W / 2, cy: H / 2 };
+    px[i] = t.cx + (Math.random() - 0.5) * 260;
+    py[i] = t.cy + (Math.random() - 0.5) * 160;
+  }
+
+  const REPULSION  = 480;
+  const CUTOFF_SQ  = 175 * 175;
+  const SPRING_K   = 0.016;
+  const SPRING_LEN = 52;
+  const GRAVITY    = 0.015;
+  const DAMPING    = 0.86;
+
+  function step(iters) {
+    for (let t = 0; t < iters; t++) {
+      fx.fill(0); fy.fill(0);
+
+      // Node repulsion (O(n²) with distance cutoff)
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const dx = px[j] - px[i], dy = py[j] - py[i];
+          const d2 = dx * dx + dy * dy;
+          if (d2 > CUTOFF_SQ || d2 < 1) continue;
+          const d  = Math.sqrt(d2);
+          const f  = REPULSION / d2;
+          const nx = dx / d * f, ny = dy / d * f;
+          fx[i] -= nx; fy[i] -= ny;
+          fx[j] += nx; fy[j] += ny;
+        }
+      }
+
+      // Same-artist springs
+      for (const [i, j] of edges) {
+        const dx = px[j] - px[i], dy = py[j] - py[i];
+        const d  = Math.sqrt(dx * dx + dy * dy) || 1;
+        const f  = SPRING_K * (d - SPRING_LEN);
+        const nx = dx / d * f, ny = dy / d * f;
+        fx[i] += nx; fy[i] += ny;
+        fx[j] -= nx; fy[j] -= ny;
+      }
+
+      // Tier gravity wells
+      for (let i = 0; i < n; i++) {
+        const t = TIERS[songs[i].tier] || { cx: W / 2, cy: H / 2 };
+        fx[i] += (t.cx - px[i]) * GRAVITY;
+        fy[i] += (t.cy - py[i]) * GRAVITY;
+      }
+
+      // Integrate with damping
+      for (let i = 0; i < n; i++) {
+        vx[i] = (vx[i] + fx[i]) * DAMPING;
+        vy[i] = (vy[i] + fy[i]) * DAMPING;
+        px[i] = Math.max(8, Math.min(W - 8, px[i] + vx[i]));
+        py[i] = Math.max(8, Math.min(H - 8, py[i] + vy[i]));
+      }
+    }
+  }
+
+  // Run simulation asynchronously in batches to keep UI responsive
+  await new Promise(resolve => {
+    let done = 0;
+    const TOTAL = 140, BATCH = 10;
+    function tick() {
+      step(BATCH);
+      done += BATCH;
+      if (done < TOTAL) setTimeout(tick, 0);
+      else resolve();
+    }
+    setTimeout(tick, 0);
+  });
+
+  function draw(hi) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b0c11';
+    ctx.fillRect(0, 0, W, H);
+
+    // Tier zone labels
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    for (const [name, t] of Object.entries(TIERS)) {
+      ctx.fillStyle = t.color + '55';
+      ctx.fillText(LABELS[name], t.cx, LABEL_Y[name]);
+    }
+    ctx.textAlign = 'left';
+
+    // Edges (artist connections)
+    const hiArtist = hi >= 0 ? songs[hi].artist : null;
+    for (const [i, j] of edges) {
+      const hot = hi === i || hi === j || (hiArtist && songs[i].artist === hiArtist);
+      ctx.strokeStyle = hot ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.04)';
+      ctx.lineWidth   = hot ? 0.9 : 0.4;
+      ctx.beginPath();
+      ctx.moveTo(px[i], py[i]);
+      ctx.lineTo(px[j], py[j]);
+      ctx.stroke();
+    }
+
+    // Nodes
+    for (let i = 0; i < n; i++) {
+      const s    = songs[i];
+      const tier = TIERS[s.tier] || { color: '#888', glow: 'rgba(128,128,128,0.15)' };
+      const isHi       = i === hi;
+      const sameArtist = hiArtist && s.artist === hiArtist && !isHi;
+      const r = isHi ? 5.5 : sameArtist ? 4 : 3;
+
+      // Glow halo for mastered / hovered
+      if (s.tier === 'mastered' || isHi) {
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], r + (isHi ? 5 : 3), 0, Math.PI * 2);
+        ctx.fillStyle = isHi ? tier.color + '44' : tier.glow;
+        ctx.fill();
+      }
+
+      // Core dot
+      ctx.beginPath();
+      ctx.arc(px[i], py[i], r, 0, Math.PI * 2);
+      ctx.fillStyle    = tier.color;
+      ctx.globalAlpha  = isHi ? 1 : s.tier === 'mastered' ? 0.85 : s.tier === 'learning' ? 0.68 : 0.55;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  draw(-1);
+
+  // Hover detection
+  let hoveredIdx = -1;
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx   = e.clientX - rect.left;
+    const my   = e.clientY - rect.top;
+
+    let best = -1, bestD2 = 400;
+    for (let i = 0; i < n; i++) {
+      const d2 = (mx - px[i]) ** 2 + (my - py[i]) ** 2;
+      if (d2 < bestD2) { bestD2 = d2; best = i; }
+    }
+
+    if (best !== hoveredIdx) { hoveredIdx = best; draw(hoveredIdx); }
+
+    if (best >= 0) {
+      const s   = songs[best];
+      const col = (TIERS[s.tier] || {}).color || '#888';
+      tooltip.innerHTML = `
+        <div class="nt-title">${escapeHtml(s.title)}</div>
+        <div class="nt-artist">${escapeHtml(s.artist)}</div>
+        <div class="nt-meta"><span style="color:${col}">${LABELS[s.tier] || s.tier}</span>&nbsp;·&nbsp;${Math.round((s.accuracy || 0) * 100)}%</div>
+      `;
+      tooltip.hidden = false;
+      tooltip.style.left = Math.min(mx + 14, W - 155) + 'px';
+      tooltip.style.top  = Math.max(6, Math.min(my - 8, H - 75)) + 'px';
+    } else {
+      tooltip.hidden = true;
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    hoveredIdx = -1;
+    tooltip.hidden = true;
+    draw(-1);
+  });
 }
 
 async function loadSessionHistory(append) {
