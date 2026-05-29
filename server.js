@@ -565,21 +565,53 @@ function handleGetStats(res) {
 
   const dueCounts = computeDueCounts();
 
+  // Tier breakdown (mirrors computeSongTier JS logic)
+  const ACC = `CAST(COALESCE(score_title,0)+COALESCE(score_artist,0)+COALESCE(score_year,0) AS REAL) / (attempts_title * 3)`;
+  const STRUGGLING = `(COALESCE(last_result,0) <= 1 OR ${ACC} < 0.50)`;
+  const tierRow = db.prepare(`
+    SELECT
+      SUM(CASE WHEN attempts_title = 0 THEN 1 ELSE 0 END)                                       AS new_c,
+      SUM(CASE WHEN attempts_title > 0 AND (${STRUGGLING})                   THEN 1 ELSE 0 END) AS struggling_c,
+      SUM(CASE WHEN attempts_title > 0 AND NOT (${STRUGGLING}) AND ${ACC} < 0.80 THEN 1 ELSE 0 END) AS learning_c,
+      SUM(CASE WHEN attempts_title > 0 AND NOT (${STRUGGLING}) AND ${ACC} >= 0.80 THEN 1 ELSE 0 END) AS mastered_c
+    FROM songs
+  `).get();
+
+  // Per-day activity for the last 91 days (heatmap)
+  const activityData = db.prepare(`
+    SELECT date(started_at) as day,
+           COUNT(*) as sessions,
+           SUM(COALESCE(song_count, 0)) as songs
+    FROM sessions
+    WHERE ended_at IS NOT NULL AND song_count > 0
+      AND started_at >= date('now', '-91 days')
+    GROUP BY date(started_at)
+    ORDER BY day
+  `).all();
+
   return json(res, 200, {
     totalSongs,
     sessionsPlayed,
     avgSessionSize: Math.round(avg || 0),
     uniqueReviewed,
     knowledge: {
-      total:  krow.total,
-      title:  krow.known_title  || 0,
-      artist: krow.known_artist || 0,
-      year:   krow.known_year   || 0,
+      total:    krow.total,
+      heard:    uniqueReviewed,
+      title:    krow.known_title  || 0,
+      artist:   krow.known_artist || 0,
+      year:     krow.known_year   || 0,
+    },
+    tierBreakdown: {
+      new:        tierRow.new_c        || 0,
+      struggling: tierRow.struggling_c || 0,
+      learning:   tierRow.learning_c   || 0,
+      mastered:   tierRow.mastered_c   || 0,
     },
     hardestSongs,
     recentSessions,
     bestStreak,
     dueCounts,
+    activityData,
   });
 }
 

@@ -1553,26 +1553,59 @@ async function renderStats() {
     return;
   }
 
+  // Stat chips
   document.getElementById('stats-overview').innerHTML = `
-    <div class="stat-chip"><span class="stat-num">${data.totalSongs}</span><span class="stat-label">Songs</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.totalSongs.toLocaleString('de-DE')}</span><span class="stat-label">Songs</span></div>
     <div class="stat-chip"><span class="stat-num">${data.sessionsPlayed}</span><span class="stat-label">Einheiten</span></div>
-    <div class="stat-chip"><span class="stat-num">${data.uniqueReviewed}</span><span class="stat-label">Gelernt</span></div>
+    <div class="stat-chip"><span class="stat-num">${data.uniqueReviewed.toLocaleString('de-DE')}</span><span class="stat-label">Gehört</span></div>
     <div class="stat-chip"><span class="stat-num">${data.avgSessionSize}</span><span class="stat-label">Ø Größe</span></div>
   `;
 
+  // Tier donut
+  setTimeout(() => drawTierDonut(document.getElementById('stats-tier-donut'), data.tierBreakdown, data.totalSongs), 0);
+
+  // Tier legend
+  const tb = data.tierBreakdown;
+  const tierItems = [
+    { label: 'Neu',         count: tb.new,        color: '#555' },
+    { label: 'Kämpfend',    count: tb.struggling,  color: '#d45555' },
+    { label: 'Lernend',     count: tb.learning,    color: '#e8a020' },
+    { label: 'Gemeistert',  count: tb.mastered,    color: '#52c48a' },
+  ];
+  document.getElementById('stats-tier-legend').innerHTML = tierItems.map(t => `
+    <div class="tier-legend-row">
+      <span class="tier-legend-dot" style="background:${t.color}"></span>
+      <span class="tier-legend-label">${t.label}</span>
+      <span class="tier-legend-count">${t.count.toLocaleString('de-DE')}</span>
+    </div>`).join('');
+
+  // Knowledge bars (% of heard songs)
   const kn = data.knowledge;
-  const total = Math.max(kn.total, 1);
-  document.getElementById('stats-knowledge').innerHTML = ['title', 'artist', 'year'].map(t => {
-    const known = kn[t] || 0;
-    const pct   = Math.round((known / total) * 100);
+  const heard = Math.max(kn.heard || kn.total, 1);
+  document.getElementById('stats-knowledge').innerHTML = [
+    { key: 'title',  label: 'Titel' },
+    { key: 'artist', label: 'Künstler' },
+    { key: 'year',   label: 'Jahr' },
+  ].map(({ key, label }) => {
+    const known = kn[key] || 0;
+    const pct   = Math.round((known / heard) * 100);
     return `<div class="knowledge-bar-row">
-      <span class="knowledge-bar-label">${{title:'Titel',artist:'Künstler',year:'Jahr'}[t]}</span>
-      <div class="knowledge-bar-track"><div class="knowledge-bar-fill knowledge-bar-fill--${t}" style="width:${pct}%"></div></div>
+      <span class="knowledge-bar-label">${label}</span>
+      <div class="knowledge-bar-track"><div class="knowledge-bar-fill knowledge-bar-fill--${key}" style="width:${pct}%"></div></div>
       <span class="knowledge-bar-pct">${pct}%</span>
-      <span class="knowledge-bar-sub">${known} von ${kn.total}</span>
+      <span class="knowledge-bar-sub">${known.toLocaleString('de-DE')} von ${kn.heard.toLocaleString('de-DE')}</span>
     </div>`;
   }).join('');
 
+  // Activity heatmap
+  const streakEl = document.getElementById('stats-streak-chip');
+  streakEl.textContent = `${data.bestStreak} Tag${data.bestStreak !== 1 ? 'e' : ''} beste Serie`;
+  renderHeatmap(data.activityData, document.getElementById('stats-heatmap'));
+
+  // Accuracy line chart
+  setTimeout(() => drawAccuracyChart(document.getElementById('stats-chart'), data.recentSessions), 0);
+
+  // Hardest songs
   if (data.hardestSongs.length) {
     document.getElementById('stats-hardest').innerHTML = data.hardestSongs.map(s => {
       const attempts = (s.attempts_title || 0) + (s.attempts_artist || 0) + (s.attempts_year || 0);
@@ -1602,58 +1635,180 @@ async function renderStats() {
     document.getElementById('stats-hardest').innerHTML = '<p class="hint" style="padding:8px 0">Noch keine Daten — spiel erst ein paar Sessions.</p>';
   }
 
-  document.getElementById('stats-streak').innerHTML = `
-    <div class="streak-display">
-      <span class="streak-num">${data.bestStreak}</span>
-      <span class="streak-label">Tag${data.bestStreak !== 1 ? 'e' : ''} beste Serie</span>
-    </div>`;
-
-  setTimeout(() => drawSessionsChart(data.recentSessions), 0);
-
   state.historyOffset = 0;
   await loadSessionHistory(false);
 }
 
-function drawSessionsChart(sessions) {
-  const canvas = document.getElementById('stats-chart');
+function drawTierDonut(canvas, tb, total) {
   if (!canvas) return;
-  const reversed = [...sessions].reverse();
-  if (!reversed.length) { canvas.style.display = 'none'; return; }
+  const dpr  = window.devicePixelRatio || 1;
+  const size = canvas.offsetWidth || 160;
+  canvas.width  = size * dpr;
+  canvas.height = size * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, size, size);
+
+  const cx = size / 2, cy = size / 2;
+  const outerR = size * 0.44;
+  const innerR = size * 0.28;
+  const gap    = 0.035;
+
+  const tiers = [
+    { count: tb.new,        color: '#3e3e3e' },
+    { count: tb.struggling, color: '#d45555' },
+    { count: tb.learning,   color: '#e8a020' },
+    { count: tb.mastered,   color: '#52c48a' },
+  ];
+  const validTotal = tiers.reduce((s, t) => s + (t.count || 0), 0) || 1;
+
+  let angle = -Math.PI / 2;
+  for (const t of tiers) {
+    const sweep = ((t.count || 0) / validTotal) * (Math.PI * 2) - gap;
+    if (sweep <= 0) continue;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, angle, angle + sweep);
+    ctx.arc(cx, cy, innerR, angle + sweep, angle, true);
+    ctx.closePath();
+    ctx.fillStyle = t.color;
+    ctx.fill();
+    angle += sweep + gap;
+  }
+
+  // Center label
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#efefef';
+  ctx.font = `700 ${Math.round(size * 0.17)}px system-ui,sans-serif`;
+  ctx.fillText(total.toLocaleString('de-DE'), cx, cy - size * 0.04);
+  ctx.font = `${Math.round(size * 0.09)}px system-ui,sans-serif`;
+  ctx.fillStyle = '#555';
+  ctx.fillText('Songs', cx, cy + size * 0.11);
+}
+
+function renderHeatmap(activityData, container) {
+  if (!container) return;
+  const dayMap = new Map((activityData || []).map(d => [d.day, d.songs]));
+  const maxSongs = Math.max(...(activityData || []).map(d => d.songs), 1);
+
+  // Start from 13 full weeks ago (Monday)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dow = (today.getDay() + 6) % 7; // 0=Mon
+  const start = new Date(today);
+  start.setDate(today.getDate() - dow - 12 * 7);
+
+  const dayLabels = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+  function cellColor(songs) {
+    if (!songs) return 'rgba(255,255,255,0.04)';
+    const t = Math.min(songs / Math.min(maxSongs, 40), 1);
+    const r = Math.round(26  + t * (82  - 26));
+    const g = Math.round(82  + t * (196 - 82));
+    const b = Math.round(42  + t * (138 - 42));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // Build weeks array: 13 weeks, each with 7 day objects
+  const weeks = [];
+  for (let w = 0; w < 13; w++) {
+    const days = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + w * 7 + d);
+      const key  = date.toISOString().split('T')[0];
+      const songs = dayMap.get(key) || 0;
+      const future = date > today;
+      days.push({ key, songs, future });
+    }
+    weeks.push(days);
+  }
+
+  container.innerHTML = `
+    <div class="heatmap-wrap">
+      <div class="heatmap-day-labels">
+        ${dayLabels.map((l, i) => `<span class="heatmap-day-label" style="grid-row:${i+1}">${i % 2 === 0 ? l : ''}</span>`).join('')}
+      </div>
+      <div class="heatmap-grid">
+        ${weeks.map(week => `<div class="heatmap-col">
+          ${week.map(day => `<div class="heatmap-cell"
+            style="background:${day.future ? 'transparent' : cellColor(day.songs)}"
+            title="${day.key}${day.songs ? ': ' + day.songs + ' Songs' : ''}"
+          ></div>`).join('')}
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function drawAccuracyChart(canvas, sessions) {
+  if (!canvas) return;
+  const valid = (sessions || []).filter(s => s.song_count > 0).reverse();
+  if (valid.length < 2) { canvas.style.display = 'none'; return; }
   canvas.style.display = 'block';
 
   const dpr = window.devicePixelRatio || 1;
   const W   = canvas.offsetWidth || 620;
-  const H   = 80;
+  const H   = 120;
   canvas.width  = W * dpr;
   canvas.height = H * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
 
-  const counts   = reversed.map(s => s.song_count || 0);
-  const maxCount = Math.max(...counts, 1);
-  const sorted   = [...counts].sort((a, b) => a - b);
-  const mid      = Math.floor(sorted.length / 2);
-  const median   = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const padL = 28, padR = 10, padT = 10, padB = 18;
+  const cW = W - padL - padR;
+  const cH = H - padT - padB;
 
-  const n    = reversed.length;
-  const gap  = 3;
-  const barW = Math.max(4, (W - gap * (n + 1)) / n);
-
-  reversed.forEach((s, i) => {
-    const count = s.song_count || 0;
-    const barH  = Math.max(2, (count / maxCount) * (H - 8));
-    const x     = gap + i * (barW + gap);
-    const y     = H - barH;
-
-    const ratio = median > 0 ? count / median : 1;
-    let color;
-    if (ratio < 0.6)       color = 'rgba(120,120,120,0.7)';
-    else if (ratio < 1.4)  color = 'rgba(245,158,11,0.85)';
-    else                   color = 'rgba(232,71,58,0.9)';
-
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, barW, barH);
+  // Horizontal grid lines
+  [0, 0.5, 1].forEach(pct => {
+    const y = padT + (1 - pct) * cH;
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.fillStyle = '#444';
+    ctx.font = `9px system-ui,sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.round(pct * 100)}%`, padL - 4, y + 3);
   });
+
+  const lines = [
+    { key: 'correct_title',  color: '#6e8ef0' },
+    { key: 'correct_artist', color: '#52c48a' },
+    { key: 'correct_year',   color: '#f5a623' },
+  ];
+
+  for (const line of lines) {
+    const pts = valid.map((s, i) => ({
+      x: padL + (i / (valid.length - 1)) * cW,
+      y: padT + (1 - (s[line.key] / s.song_count)) * cH,
+    }));
+
+    // Filled area under line
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, padT + cH);
+    pts.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(pts[pts.length - 1].x, padT + cH);
+    ctx.closePath();
+    ctx.fillStyle = line.color + '18';
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = line.color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+
+    // Dots
+    ctx.fillStyle = line.color;
+    for (const p of pts) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 async function loadSessionHistory(append) {

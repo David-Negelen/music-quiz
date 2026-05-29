@@ -1445,7 +1445,6 @@ details[open].review-group > summary.review-group-label::before { content: '▾ 
 .stats-page { display: flex; flex-direction: column; gap: 28px; padding-bottom: 32px; }
 
 .stats-overview-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-
 @media (max-width: 480px) { .stats-overview-row { grid-template-columns: repeat(2, 1fr); } }
 
 .stat-chip {
@@ -1458,53 +1457,120 @@ details[open].review-group > summary.review-group-label::before { content: '▾ 
   flex-direction: column;
   gap: 4px;
 }
-
 .stat-num   { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
 .stat-label { font-size: 10px; color: var(--text-3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
 
 .stats-section { display: flex; flex-direction: column; gap: 10px; }
-
 .stats-section-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
+  font-size: 10px; font-weight: 600; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.8px; margin: 0;
 }
+.stats-section-header { display: flex; align-items: center; justify-content: space-between; }
+
+/* Two-column layout for donut + knowledge */
+.stats-duo {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 560px) { .stats-duo { grid-template-columns: 1fr; } }
+
+/* Tier donut */
+.tier-donut-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.tier-donut-canvas {
+  width: 160px;
+  height: 160px;
+  display: block;
+  flex-shrink: 0;
+}
+.tier-legend { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.tier-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+.tier-legend-dot   { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tier-legend-label { flex: 1; color: var(--text-2); }
+.tier-legend-count { color: var(--text-3); font-variant-numeric: tabular-nums; }
 
 /* Knowledge bars */
 .knowledge-bar-row {
   display: grid;
-  grid-template-columns: 52px 1fr 38px auto;
+  grid-template-columns: 52px 1fr 36px auto;
   align-items: center;
   gap: 10px;
-  padding: 3px 0;
+  padding: 4px 0;
+}
+.knowledge-bar-label { font-size: 13px; font-weight: 500; }
+.knowledge-bar-track { height: 5px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+.knowledge-bar-fill  { height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+.knowledge-bar-fill--title  { background: var(--accent); }
+.knowledge-bar-fill--artist { background: #52c48a; }
+.knowledge-bar-fill--year   { background: #e8a020; }
+.knowledge-bar-pct { font-size: 12px; font-weight: 500; color: var(--text-2); text-align: right; }
+.knowledge-bar-sub { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+
+/* Activity heatmap */
+.stats-streak-chip {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.stats-heatmap-outer { overflow-x: auto; }
+.heatmap-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.heatmap-day-labels {
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  gap: 3px;
+  padding-top: 1px;
+  flex-shrink: 0;
+}
+.heatmap-day-label { font-size: 9px; color: var(--text-3); line-height: 12px; }
+.heatmap-grid {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+.heatmap-col { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  min-width: 10px;
+  cursor: default;
 }
 
-.knowledge-bar-label { font-size: 13px; font-weight: 500; }
-.knowledge-bar-track { height: 2px; background: var(--surface-3); border-radius: 1px; overflow: hidden; }
-.knowledge-bar-fill  { height: 100%; background: var(--accent); border-radius: 1px; transition: width 0.5s ease; }
-.knowledge-bar-fill--title  { background: var(--accent); }
-.knowledge-bar-fill--artist { background: var(--accent); opacity: 0.7; }
-.knowledge-bar-fill--year   { background: var(--accent); opacity: 0.5; }
-.knowledge-bar-pct   { font-size: 12px; font-weight: 500; color: var(--text-3); text-align: right; }
-.knowledge-bar-sub   { font-size: 11px; color: var(--text-3); white-space: nowrap; }
-
-/* Streak */
-.streak-display { display: flex; align-items: baseline; gap: 8px; }
-.streak-num     { font-size: 36px; font-weight: 700; color: var(--text); line-height: 1; letter-spacing: -1px; }
-.streak-label   { font-size: 14px; color: var(--text-3); }
-
-.stats-section--activity { gap: 14px; }
-.stats-streak { }
-
+/* Accuracy line chart */
 .stats-chart {
   width: 100%;
-  height: 72px;
+  height: 120px;
   display: block;
   border-radius: var(--radius);
   background: var(--surface);
   border: 1px solid var(--border);
+}
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.chart-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .stats-load-more { align-self: flex-start; margin-top: 4px; }

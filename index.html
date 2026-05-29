@@ -208,25 +208,61 @@
     <!-- Stats View -->
     <section id="view-stats" class="view">
       <div class="stats-page">
+
+        <!-- Stat chips -->
         <div id="stats-overview" class="stats-overview-row"></div>
-        <div class="stats-section">
-          <h3 class="stats-section-title">Wissen</h3>
-          <div id="stats-knowledge"></div>
+
+        <!-- Tier donut + Knowledge bars -->
+        <div class="stats-duo">
+          <div class="stats-section">
+            <h3 class="stats-section-title">Bibliothek</h3>
+            <div class="tier-donut-wrap">
+              <canvas id="stats-tier-donut" class="tier-donut-canvas"></canvas>
+              <div id="stats-tier-legend" class="tier-legend"></div>
+            </div>
+          </div>
+          <div class="stats-section">
+            <h3 class="stats-section-title">Wissen</h3>
+            <div id="stats-knowledge"></div>
+          </div>
         </div>
+
+        <!-- Activity heatmap -->
+        <div class="stats-section">
+          <div class="stats-section-header">
+            <h3 class="stats-section-title">Aktivität</h3>
+            <span id="stats-streak-chip" class="stats-streak-chip"></span>
+          </div>
+          <div id="stats-heatmap" class="stats-heatmap-outer"></div>
+        </div>
+
+        <!-- Session accuracy line chart -->
+        <div class="stats-section">
+          <div class="stats-section-header">
+            <h3 class="stats-section-title">Genauigkeit</h3>
+            <div class="chart-legend">
+              <span class="chart-legend-dot" style="background:#6e8ef0"></span>Titel
+              <span class="chart-legend-dot" style="background:#52c48a"></span>Künstler
+              <span class="chart-legend-dot" style="background:#f5a623"></span>Jahr
+            </div>
+          </div>
+          <canvas id="stats-chart" class="stats-chart"></canvas>
+        </div>
+
+        <!-- Hardest songs -->
         <div class="stats-section">
           <h3 class="stats-section-title">Schwierigste Songs</h3>
           <div id="stats-hardest"></div>
         </div>
-        <div class="stats-section stats-section--activity">
-          <h3 class="stats-section-title">Aktivität</h3>
-          <div id="stats-streak" class="stats-streak"></div>
-          <canvas id="stats-chart" class="stats-chart"></canvas>
-        </div>
+
+        <!-- Session history -->
         <div class="stats-section">
           <h3 class="stats-section-title">Vergangene Sessions</h3>
           <div id="stats-history"></div>
           <button id="stats-load-more" class="btn-ghost btn-sm stats-load-more" style="display:none">Mehr laden</button>
         </div>
+
+        <!-- Database backups -->
         <div class="stats-section">
           <div class="stats-section-header">
             <h3 class="stats-section-title">Datenbank</h3>
@@ -234,6 +270,7 @@
           </div>
           <div id="stats-backups"></div>
         </div>
+
       </div>
     </section>
   </div>
