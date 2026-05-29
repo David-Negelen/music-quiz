@@ -1857,8 +1857,8 @@ const songMap = (() => {
       t:     tier(s),
       due:   isDue(s),
       vx: 0, vy: 0,
-      x: W / 2 + (Math.random() - 0.5) * 80,
-      y: H / 2 + (Math.random() - 0.5) * 80,
+      x: W / 2 + (Math.random() - 0.5) * 600,
+      y: H / 2 + (Math.random() - 0.5) * 600,
     }));
 
     const all = [];
@@ -2112,12 +2112,18 @@ const songMap = (() => {
     const ticks = songs.length > 500 ? 200 : songs.length > 200 ? 250 : 300;
     await simulate(canvas, ticks);
 
-    // Center the layout in the canvas
-    let cx = 0, cy = 0;
-    for (const n of nodes) { cx += n.x; cy += n.y; }
-    cx /= nodes.length; cy /= nodes.length;
-    const dx = W / 2 - cx, dy = H / 2 - cy;
-    for (const n of nodes) { n.x += dx; n.y += dy; }
+    // Fit all nodes into initial view
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      if (n.x - n.r < minX) minX = n.x - n.r;
+      if (n.x + n.r > maxX) maxX = n.x + n.r;
+      if (n.y - n.r < minY) minY = n.y - n.r;
+      if (n.y + n.r > maxY) maxY = n.y + n.r;
+    }
+    const pad = 40;
+    zoom = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxY - minY));
+    pan.x = pad - minX * zoom + (W - pad * 2 - (maxX - minX) * zoom) / 2;
+    pan.y = pad - minY * zoom + (H - pad * 2 - (maxY - minY) * zoom) / 2;
 
     // Interactions
     let dragging = false, dragOrigin = null, panOrigin = null;
