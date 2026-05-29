@@ -1887,11 +1887,20 @@ async function renderSongNetwork(container) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  // Scale stored [0,1] positions to canvas pixels
-  const PAD = 28;
-  const n  = songs.length;
-  const px = songs.map(s => PAD + (s.embed_x||0.5) * (W - 2*PAD));
-  const py = songs.map(s => PAD + (s.embed_y||0.5) * (H - 2*PAD));
+  // Min-max normalize embed positions to canvas pixels.
+  // Done at render time so it adapts to any canvas size and handles output
+  // that isn't uniformly spread across [0,1].
+  const PAD = 40;
+  const n   = songs.length;
+  let mnEX = Infinity, mxEX = -Infinity, mnEY = Infinity, mxEY = -Infinity;
+  for (const s of songs) {
+    const x = s.embed_x ?? 0.5, y = s.embed_y ?? 0.5;
+    if (x < mnEX) mnEX = x; if (x > mxEX) mxEX = x;
+    if (y < mnEY) mnEY = y; if (y > mxEY) mxEY = y;
+  }
+  const rEX = Math.max(mxEX - mnEX, 1e-6), rEY = Math.max(mxEY - mnEY, 1e-6);
+  const px  = songs.map(s => PAD + ((s.embed_x??0.5) - mnEX) / rEX * (W - 2*PAD));
+  const py  = songs.map(s => PAD + ((s.embed_y??0.5) - mnEY) / rEY * (H - 2*PAD));
 
   // ── Colour functions (instant — no re-simulation) ─────────────────────────
 
@@ -1909,7 +1918,8 @@ async function renderSongNetwork(container) {
     return 0.78;
   }
 
-  // Cluster-centroid labels — placed where data actually lives
+  // Cluster-centroid labels — computed from normalised canvas positions
+  const MIN_DOTS_FOR_LABEL = 3;
   function clusterLabels() {
     if (mode === 'lernstand') return [];
     const sums = {};
@@ -1922,7 +1932,9 @@ async function renderSongNetwork(container) {
       if (!sums[key]) sums[key] = { sx:0, sy:0, c:0 };
       sums[key].sx += px[i]; sums[key].sy += py[i]; sums[key].c++;
     }
-    return Object.entries(sums).map(([key, {sx, sy, c}]) => ({
+    return Object.entries(sums)
+      .filter(([, {c}]) => c >= MIN_DOTS_FOR_LABEL)
+      .map(([key, {sx, sy, c}]) => ({
       text:  mode === 'jahrzehnt' ? key : (key.length > 14 ? key.slice(0,13)+'…' : key),
       color: mode === 'jahrzehnt' ? DECADE_COLORS[key]||'#555' : artistColor[key],
       x: sx/c, y: sy/c - 10,

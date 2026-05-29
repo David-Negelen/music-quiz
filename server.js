@@ -144,6 +144,15 @@ try { db.prepare('ALTER TABLE songs ADD COLUMN genre TEXT DEFAULT NULL').run(); 
 try { db.prepare('ALTER TABLE songs ADD COLUMN embed_x REAL DEFAULT NULL').run(); } catch {}
 try { db.prepare('ALTER TABLE songs ADD COLUMN embed_y REAL DEFAULT NULL').run(); } catch {}
 
+// Bump LAYOUT_VERSION to force a full recompute after algorithm changes
+db.prepare('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, val TEXT)').run();
+const LAYOUT_VERSION = '3';
+const _lv = db.prepare("SELECT val FROM kv WHERE key='layout_v'").get();
+if (!_lv || _lv.val !== LAYOUT_VERSION) {
+  db.prepare('UPDATE songs SET embed_x=NULL, embed_y=NULL').run();
+  db.prepare("INSERT OR REPLACE INTO kv(key,val) VALUES('layout_v',?)").run(LAYOUT_VERSION);
+}
+
 // Migrate: track which storefront the preview was fetched from
 try { db.prepare('ALTER TABLE songs ADD COLUMN preview_country TEXT DEFAULT NULL').run(); } catch {}
 
@@ -612,14 +621,29 @@ function computeNetworkLayout() {
       fx[j] -= dx*f; fy[j] -= dy*f;
     }
 
-    // Integrate + boundary clamp
+    // Gentle centering force — prevents unbounded drift without distorting clusters
+    for (let i = 0; i < n; i++) {
+      fx[i] += (0.5 - px[i]) * 0.0018;
+      fy[i] += (0.5 - py[i]) * 0.0018;
+    }
+
+    // Integrate — NO boundary clamp (we min-max normalize after simulation)
     for (let i = 0; i < n; i++) {
       vx[i] = (vx[i] + fx[i]) * DAMPING;
       vy[i] = (vy[i] + fy[i]) * DAMPING;
-      px[i] = Math.max(0.01, Math.min(0.99, px[i] + vx[i]));
-      py[i] = Math.max(0.01, Math.min(0.99, py[i] + vy[i]));
+      px[i] += vx[i];
+      py[i] += vy[i];
     }
   }
+
+  // Normalize output to [0,1] so the full canvas is used after client min-max scaling
+  let mnX = Infinity, mxX = -Infinity, mnY = Infinity, mxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    if (px[i] < mnX) mnX = px[i]; if (px[i] > mxX) mxX = px[i];
+    if (py[i] < mnY) mnY = py[i]; if (py[i] > mxY) mxY = py[i];
+  }
+  const rX = Math.max(mxX - mnX, 1e-6), rY = Math.max(mxY - mnY, 1e-6);
+  for (let i = 0; i < n; i++) { px[i] = (px[i]-mnX)/rX; py[i] = (py[i]-mnY)/rY; }
 
   // Persist
   const upd = db.prepare('UPDATE songs SET embed_x = ?, embed_y = ? WHERE id = ?');
