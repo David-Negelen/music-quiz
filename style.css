@@ -1952,6 +1952,20 @@ details[open].review-group > summary.review-group-label::before { content: '▾ 
 .network-canvas  { display: block; width: 100%; border-radius: 10px; cursor: crosshair; }
 .network-loading { padding: 48px 0; text-align: center; color: var(--text-3); font-size: 13px; }
 
+.network-mode-bar { display: flex; gap: 6px; margin-bottom: 10px; }
+.network-mode-btn {
+  padding: 5px 13px;
+  border-radius: 20px;
+  border: 1px solid var(--surface-3);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.network-mode-btn:hover  { background: var(--surface-3); color: var(--text); }
+.network-mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 .network-tooltip {
   position: absolute;
   pointer-events: none;

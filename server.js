@@ -514,7 +514,7 @@ function handleGetSongNetwork(res) {
   const KNOWN_ARTIST = `(CASE WHEN attempts_artist > 0 AND score_artist >= 1 AND CAST(score_artist AS REAL)/attempts_artist >= 0.5 THEN 1 ELSE 0 END)`;
   const KNOWN_YEAR   = `(CASE WHEN attempts_year   > 0 AND score_year   >= 1 AND CAST(score_year   AS REAL)/attempts_year   >= 0.5 THEN 1 ELSE 0 END)`;
   const rows = db.prepare(`
-    SELECT id, title, artist, attempts_title, kn,
+    SELECT id, title, artist, year, attempts_title, kn,
       CASE kn WHEN 0 THEN 'k0' WHEN 1 THEN 'k1' WHEN 2 THEN 'k2' ELSE 'k3' END as tier,
       ROUND(kn / 3.0, 3) as accuracy
     FROM (

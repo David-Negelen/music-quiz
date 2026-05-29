@@ -1825,25 +1825,22 @@ async function renderSongNetwork(container) {
     container.innerHTML = '<p class="hint" style="padding:8px 0">Netzwerk konnte nicht geladen werden.</p>';
     return;
   }
-
   if (songs.length < 2) {
     container.innerHTML = '<p class="hint" style="padding:8px 0">Spiel erst ein paar Songs.</p>';
     return;
   }
 
-  // Artist chains: consecutive pairs sorted by accuracy (server sends ORDER BY artist, accuracy)
+  // Artist chains: consecutive pairs (server sends ORDER BY artist, kn)
   const artistGroups = {};
-  songs.forEach((s, i) => {
-    if (!artistGroups[s.artist]) artistGroups[s.artist] = [];
-    artistGroups[s.artist].push(i);
-  });
+  songs.forEach((s, i) => { (artistGroups[s.artist] = artistGroups[s.artist] || []).push(i); });
   const edges = [];
-  for (const group of Object.values(artistGroups)) {
-    for (let k = 0; k < group.length - 1; k++) edges.push([group[k], group[k + 1]]);
-  }
+  for (const g of Object.values(artistGroups))
+    for (let k = 0; k < g.length - 1; k++) edges.push([g[k], g[k + 1]]);
 
-  // DOM: wrap div for tooltip positioning
-  const wrap = document.createElement('div');
+  // DOM
+  const modeBar = document.createElement('div');
+  modeBar.className = 'network-mode-bar';
+  const wrap    = document.createElement('div');
   wrap.style.position = 'relative';
   const canvas  = document.createElement('canvas');
   canvas.className = 'network-canvas';
@@ -1853,6 +1850,7 @@ async function renderSongNetwork(container) {
   wrap.appendChild(canvas);
   wrap.appendChild(tooltip);
   container.innerHTML = '';
+  container.appendChild(modeBar);
   container.appendChild(wrap);
 
   const W   = container.clientWidth || 620;
@@ -1865,17 +1863,82 @@ async function renderSongNetwork(container) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  // Tier config: gravity center + colors (diamond: 0 known=bottom, 3 known=top)
-  const TIERS = {
-    k0: { color: '#b03a3a', glow: 'rgba(176,58,58,0.18)',   cx: W * 0.50, cy: H * 0.78 },
-    k1: { color: '#c87820', glow: 'rgba(200,120,32,0.18)',  cx: W * 0.20, cy: H * 0.48 },
-    k2: { color: '#5a85d4', glow: 'rgba(90,133,212,0.18)',  cx: W * 0.80, cy: H * 0.48 },
-    k3: { color: '#52c48a', glow: 'rgba(82,196,138,0.18)',  cx: W * 0.50, cy: H * 0.18 },
-  };
-  const LABELS = { k0: '0 gewusst', k1: '1 gewusst', k2: '2 gewusst', k3: '3 gewusst' };
-  const LABEL_Y = { k0: H * 0.94, k1: H * 0.52, k2: H * 0.52, k3: H * 0.07 };
+  // ── Well builders ─────────────────────────────────────────────────────────
 
-  // Node physics arrays
+  function buildLernstandWells() {
+    return {
+      k0: { color: '#b03a3a', cx: W*0.50, cy: H*0.78, label: '0 gewusst', labelY: H*0.94 },
+      k1: { color: '#c87820', cx: W*0.20, cy: H*0.48, label: '1 gewusst', labelY: H*0.36 },
+      k2: { color: '#5a85d4', cx: W*0.80, cy: H*0.48, label: '2 gewusst', labelY: H*0.36 },
+      k3: { color: '#52c48a', cx: W*0.50, cy: H*0.18, label: '3 gewusst', labelY: H*0.07 },
+    };
+  }
+
+  function decadeOf(year) {
+    const y = parseInt(year, 10);
+    return isNaN(y) ? null : `${Math.floor(y / 10) * 10}er`;
+  }
+
+  function buildDecadeWells() {
+    const DECADE_COLORS = {
+      '1950er':'#9b6b9b','1960er':'#c87040','1970er':'#c8a040',
+      '1980er':'#c83080','1990er':'#7840c8','2000er':'#4080c8',
+      '2010er':'#20a8a0','2020er':'#52c48a',
+    };
+    const present = [...new Set(songs.map(s => decadeOf(s.year)).filter(Boolean))].sort();
+    const wells = {};
+    const gap = W / (present.length + 1);
+    present.forEach((dec, idx) => {
+      const cy = idx % 2 === 0 ? H * 0.35 : H * 0.65;
+      wells[dec] = {
+        color:  DECADE_COLORS[dec] || '#888',
+        cx:     gap * (idx + 1),
+        cy,
+        label:  dec,
+        labelY: idx % 2 === 0 ? H * 0.22 : H * 0.80,
+      };
+    });
+    return wells;
+  }
+
+  function buildArtistWells() {
+    const counts = {};
+    for (const s of songs) counts[s.artist] = (counts[s.artist] || 0) + 1;
+    const top12 = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([a]) => a);
+    const palette = [
+      '#e05252','#e08020','#d4c820','#52c48a','#20c4c4','#5284e0',
+      '#9452e0','#e052c4','#c45220','#52e090','#20a8e0','#e0b052',
+    ];
+    const wells = { __other__: { color: '#444', cx: W*0.5, cy: H*0.5, label: '', labelY: 0 } };
+    const cx = W*0.5, cy = H*0.5, rx = W*0.38, ry = H*0.34;
+    top12.forEach((artist, idx) => {
+      const angle = (idx / top12.length) * Math.PI * 2 - Math.PI / 2;
+      const wx = cx + Math.cos(angle) * rx;
+      const wy = cy + Math.sin(angle) * ry;
+      const short = artist.length > 14 ? artist.slice(0, 13) + '…' : artist;
+      wells[artist] = {
+        color:  palette[idx],
+        cx: wx, cy: wy,
+        label:  short,
+        labelY: wy + (Math.sin(angle) >= 0 ? 18 : -10),
+      };
+    });
+    return wells;
+  }
+
+  // ── Mode state ────────────────────────────────────────────────────────────
+
+  let currentMode = 'lernstand';
+  let wells = buildLernstandWells();
+
+  function keyOf(s) {
+    if (currentMode === 'lernstand') return s.tier;
+    if (currentMode === 'jahrzehnt') return decadeOf(s.year) || '__other__';
+    return wells[s.artist] ? s.artist : '__other__';
+  }
+
+  // ── Physics ───────────────────────────────────────────────────────────────
+
   const n  = songs.length;
   const px = new Float32Array(n);
   const py = new Float32Array(n);
@@ -1884,131 +1947,105 @@ async function renderSongNetwork(container) {
   const fx = new Float32Array(n);
   const fy = new Float32Array(n);
 
-  // Seed near tier centers (tight initial spread so nodes start away from edges)
-  for (let i = 0; i < n; i++) {
-    const t = TIERS[songs[i].tier] || { cx: W / 2, cy: H / 2 };
-    px[i] = Math.max(20, Math.min(W - 20, t.cx + (Math.random() - 0.5) * 140));
-    py[i] = Math.max(20, Math.min(H - 20, t.cy + (Math.random() - 0.5) * 100));
-  }
+  const REPULSION = 160, CUTOFF_SQ = 110*110;
+  const SPRING_K  = 0.005, SPRING_LEN = 60;
+  const GRAVITY   = 0.10,  DAMPING    = 0.80;
 
-  const REPULSION  = 360;
-  const CUTOFF_SQ  = 160 * 160;
-  const SPRING_K   = 0.016;
-  const SPRING_LEN = 52;
-  const GRAVITY    = 0.028;
-  const DAMPING    = 0.84;
+  function seed() {
+    for (let i = 0; i < n; i++) {
+      const w = wells[keyOf(songs[i])] || { cx: W/2, cy: H/2 };
+      px[i] = Math.max(20, Math.min(W-20, w.cx + (Math.random()-0.5)*60));
+      py[i] = Math.max(20, Math.min(H-20, w.cy + (Math.random()-0.5)*40));
+    }
+  }
 
   function step(iters) {
     for (let t = 0; t < iters; t++) {
       fx.fill(0); fy.fill(0);
-
-      // Node repulsion (O(n²) with distance cutoff)
       for (let i = 0; i < n; i++) {
-        for (let j = i + 1; j < n; j++) {
-          const dx = px[j] - px[i], dy = py[j] - py[i];
-          const d2 = dx * dx + dy * dy;
+        for (let j = i+1; j < n; j++) {
+          const dx = px[j]-px[i], dy = py[j]-py[i];
+          const d2 = dx*dx + dy*dy;
           if (d2 > CUTOFF_SQ || d2 < 1) continue;
-          const d  = Math.sqrt(d2);
-          const f  = REPULSION / d2;
-          const nx = dx / d * f, ny = dy / d * f;
-          fx[i] -= nx; fy[i] -= ny;
-          fx[j] += nx; fy[j] += ny;
+          const d = Math.sqrt(d2), f = REPULSION/d2;
+          const nx = dx/d*f, ny = dy/d*f;
+          fx[i] -= nx; fy[i] -= ny; fx[j] += nx; fy[j] += ny;
         }
       }
-
-      // Same-artist springs
       for (const [i, j] of edges) {
-        const dx = px[j] - px[i], dy = py[j] - py[i];
-        const d  = Math.sqrt(dx * dx + dy * dy) || 1;
+        const dx = px[j]-px[i], dy = py[j]-py[i];
+        const d  = Math.sqrt(dx*dx + dy*dy) || 1;
         const f  = SPRING_K * (d - SPRING_LEN);
-        const nx = dx / d * f, ny = dy / d * f;
-        fx[i] += nx; fy[i] += ny;
-        fx[j] -= nx; fy[j] -= ny;
+        const nx = dx/d*f, ny = dy/d*f;
+        fx[i] += nx; fy[i] += ny; fx[j] -= nx; fy[j] -= ny;
       }
-
-      // Tier gravity wells
       for (let i = 0; i < n; i++) {
-        const t = TIERS[songs[i].tier] || { cx: W / 2, cy: H / 2 };
-        fx[i] += (t.cx - px[i]) * GRAVITY;
-        fy[i] += (t.cy - py[i]) * GRAVITY;
+        const w = wells[keyOf(songs[i])] || { cx: W/2, cy: H/2 };
+        fx[i] += (w.cx - px[i]) * GRAVITY;
+        fy[i] += (w.cy - py[i]) * GRAVITY;
       }
-
-      // Integrate with damping + boundary bounce
       for (let i = 0; i < n; i++) {
         vx[i] = (vx[i] + fx[i]) * DAMPING;
         vy[i] = (vy[i] + fy[i]) * DAMPING;
-        let nx = px[i] + vx[i];
-        let ny = py[i] + vy[i];
-        if (nx < 14)      { nx = 14;      vx[i] = Math.abs(vx[i]) * 0.25; }
-        else if (nx > W - 14) { nx = W - 14; vx[i] = -Math.abs(vx[i]) * 0.25; }
-        if (ny < 14)      { ny = 14;      vy[i] = Math.abs(vy[i]) * 0.25; }
-        else if (ny > H - 14) { ny = H - 14; vy[i] = -Math.abs(vy[i]) * 0.25; }
-        px[i] = nx;
-        py[i] = ny;
+        let nx = px[i]+vx[i], ny = py[i]+vy[i];
+        if (nx < 14)      { nx = 14;    vx[i] =  Math.abs(vx[i])*0.25; }
+        else if (nx>W-14) { nx = W-14;  vx[i] = -Math.abs(vx[i])*0.25; }
+        if (ny < 14)      { ny = 14;    vy[i] =  Math.abs(vy[i])*0.25; }
+        else if (ny>H-14) { ny = H-14;  vy[i] = -Math.abs(vy[i])*0.25; }
+        px[i] = nx; py[i] = ny;
       }
     }
   }
 
-  // Run simulation asynchronously in batches to keep UI responsive
-  await new Promise(resolve => {
-    let done = 0;
-    const TOTAL = 140, BATCH = 10;
-    function tick() {
-      step(BATCH);
-      done += BATCH;
-      if (done < TOTAL) setTimeout(tick, 0);
-      else resolve();
-    }
-    setTimeout(tick, 0);
-  });
+  async function runSim(total) {
+    await new Promise(resolve => {
+      let done = 0;
+      function tick() { step(10); done += 10; done < total ? setTimeout(tick, 0) : resolve(); }
+      setTimeout(tick, 0);
+    });
+  }
+
+  seed();
+  await runSim(220);
+
+  // ── Draw ──────────────────────────────────────────────────────────────────
 
   function draw(hi) {
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0b0c11';
     ctx.fillRect(0, 0, W, H);
 
-    // Tier zone labels
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    for (const [name, t] of Object.entries(TIERS)) {
-      ctx.fillStyle = t.color + '55';
-      ctx.fillText(LABELS[name], t.cx, LABEL_Y[name]);
+    for (const [key, w] of Object.entries(wells)) {
+      if (!w.label || key === '__other__') continue;
+      ctx.fillStyle = w.color + '66';
+      ctx.fillText(w.label, w.cx, w.labelY);
     }
     ctx.textAlign = 'left';
 
-    // Edges (artist connections)
     const hiArtist = hi >= 0 ? songs[hi].artist : null;
     for (const [i, j] of edges) {
-      const hot = hi === i || hi === j || (hiArtist && songs[i].artist === hiArtist);
+      const hot = hi===i || hi===j || (hiArtist && songs[i].artist===hiArtist);
       ctx.strokeStyle = hot ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.04)';
       ctx.lineWidth   = hot ? 0.9 : 0.4;
-      ctx.beginPath();
-      ctx.moveTo(px[i], py[i]);
-      ctx.lineTo(px[j], py[j]);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px[i],py[i]); ctx.lineTo(px[j],py[j]); ctx.stroke();
     }
 
-    // Nodes
     for (let i = 0; i < n; i++) {
-      const s    = songs[i];
-      const tier = TIERS[s.tier] || { color: '#888', glow: 'rgba(128,128,128,0.15)' };
-      const isHi       = i === hi;
+      const s  = songs[i];
+      const w  = wells[keyOf(s)] || { color: '#555' };
+      const isHi = i === hi;
       const sameArtist = hiArtist && s.artist === hiArtist && !isHi;
       const r = isHi ? 5.5 : sameArtist ? 4 : 3;
 
-      // Glow halo for fully-known / hovered
-      if (s.tier === 'k3' || isHi) {
-        ctx.beginPath();
-        ctx.arc(px[i], py[i], r + (isHi ? 5 : 3), 0, Math.PI * 2);
-        ctx.fillStyle = isHi ? tier.color + '44' : tier.glow;
-        ctx.fill();
+      if (isHi) {
+        ctx.beginPath(); ctx.arc(px[i], py[i], r+5, 0, Math.PI*2);
+        ctx.fillStyle = w.color + '44'; ctx.fill();
       }
-
-      // Core dot
-      ctx.beginPath();
-      ctx.arc(px[i], py[i], r, 0, Math.PI * 2);
-      ctx.fillStyle    = tier.color;
-      ctx.globalAlpha  = isHi ? 1 : s.tier === 'k3' ? 0.90 : s.tier === 'k2' ? 0.78 : s.tier === 'k1' ? 0.65 : 0.52;
+      ctx.beginPath(); ctx.arc(px[i], py[i], r, 0, Math.PI*2);
+      ctx.fillStyle   = w.color;
+      ctx.globalAlpha = isHi ? 1 : 0.75;
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -2016,43 +2053,60 @@ async function renderSongNetwork(container) {
 
   draw(-1);
 
-  // Hover detection
+  // ── Mode buttons ──────────────────────────────────────────────────────────
+
+  let simRunning = false;
+  [['lernstand','Lernstand'],['jahrzehnt','Jahrzehnt'],['kuenstler','Künstler']].forEach(([id, label]) => {
+    const btn = document.createElement('button');
+    btn.className = 'network-mode-btn' + (id === currentMode ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', async () => {
+      if (simRunning || id === currentMode) return;
+      simRunning = true;
+      currentMode = id;
+      modeBar.querySelectorAll('.network-mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (id === 'lernstand')   wells = buildLernstandWells();
+      else if (id === 'jahrzehnt') wells = buildDecadeWells();
+      else                         wells = buildArtistWells();
+      vx.fill(0); vy.fill(0);
+      await runSim(200);
+      draw(-1);
+      simRunning = false;
+    });
+    modeBar.appendChild(btn);
+  });
+
+  // ── Hover ─────────────────────────────────────────────────────────────────
+
   let hoveredIdx = -1;
   canvas.addEventListener('mousemove', e => {
+    if (simRunning) return;
     const rect = canvas.getBoundingClientRect();
-    const mx   = e.clientX - rect.left;
-    const my   = e.clientY - rect.top;
-
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     let best = -1, bestD2 = 400;
     for (let i = 0; i < n; i++) {
-      const d2 = (mx - px[i]) ** 2 + (my - py[i]) ** 2;
+      const d2 = (mx-px[i])**2 + (my-py[i])**2;
       if (d2 < bestD2) { bestD2 = d2; best = i; }
     }
-
     if (best !== hoveredIdx) { hoveredIdx = best; draw(hoveredIdx); }
-
     if (best >= 0) {
       const s   = songs[best];
-      const col  = (TIERS[s.tier] || {}).color || '#888';
-      const known = s.kn != null ? s.kn : { k0: 0, k1: 1, k2: 2, k3: 3 }[s.tier] ?? '?';
+      const col = (wells[keyOf(s)] || {}).color || '#888';
+      const known = s.kn != null ? s.kn : { k0:0,k1:1,k2:2,k3:3 }[s.tier] ?? '?';
       tooltip.innerHTML = `
         <div class="nt-title">${escapeHtml(s.title)}</div>
         <div class="nt-artist">${escapeHtml(s.artist)}</div>
-        <div class="nt-meta"><span style="color:${col}">${known}/3 gewusst</span></div>
+        <div class="nt-meta"><span style="color:${col}">${known}/3 gewusst</span>${s.year ? ` · ${s.year}` : ''}</div>
       `;
       tooltip.hidden = false;
-      tooltip.style.left = Math.min(mx + 14, W - 155) + 'px';
-      tooltip.style.top  = Math.max(6, Math.min(my - 8, H - 75)) + 'px';
+      tooltip.style.left = Math.min(mx+14, W-155) + 'px';
+      tooltip.style.top  = Math.max(6, Math.min(my-8, H-75)) + 'px';
     } else {
       tooltip.hidden = true;
     }
   });
-
-  canvas.addEventListener('mouseleave', () => {
-    hoveredIdx = -1;
-    tooltip.hidden = true;
-    draw(-1);
-  });
+  canvas.addEventListener('mouseleave', () => { hoveredIdx = -1; tooltip.hidden = true; draw(-1); });
 }
 
 async function loadSessionHistory(append) {
