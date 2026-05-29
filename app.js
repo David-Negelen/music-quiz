@@ -1857,8 +1857,8 @@ const songMap = (() => {
       t:     tier(s),
       due:   isDue(s),
       vx: 0, vy: 0,
-      x: W / 2 + (Math.random() - 0.5) * 600,
-      y: H / 2 + (Math.random() - 0.5) * 600,
+      x: W / 2 + Math.cos(Math.random() * Math.PI * 2) * Math.sqrt(Math.random()) * 350,
+      y: H / 2 + Math.sin(Math.random() * Math.PI * 2) * Math.sqrt(Math.random()) * 350,
     }));
 
     const all = [];
@@ -1900,7 +1900,7 @@ const songMap = (() => {
         const dx = nj.x - ni.x, dy = nj.y - ni.y;
         const d2 = Math.max(1, dx * dx + dy * dy);
         const d  = Math.sqrt(d2);
-        const f  = alpha * 5000 / d2;
+        const f  = alpha * 3000 / d2;
         const fx = dx / d * f, fy = dy / d * f;
         ni.vx -= fx; ni.vy -= fy;
         nj.vx += fx; nj.vy += fy;
@@ -1910,7 +1910,8 @@ const songMap = (() => {
       const ni = nodes[e.source], nj = nodes[e.target];
       const dx = nj.x - ni.x, dy = nj.y - ni.y;
       const d  = Math.sqrt(dx * dx + dy * dy) || 1;
-      const s  = (d - 80) * 0.07 * alpha * e.strength;
+      if (d > 220) continue;
+      const s  = (d - 60) * 0.07 * alpha * e.strength;
       const fx = dx / d * s * 0.5, fy = dy / d * s * 0.5;
       ni.vx += fx; ni.vy += fy;
       nj.vx -= fx; nj.vy -= fy;
@@ -2012,6 +2013,8 @@ const songMap = (() => {
     ctx.lineWidth = 0.6;
     for (const e of edges) {
       const ni = nodes[e.source], nj = nodes[e.target];
+      const dx = nj.x - ni.x, dy = nj.y - ni.y;
+      if (dx * dx + dy * dy > 220 * 220) continue;
       const baseA = EDGE_ALPHA[Math.min(e.strength, 4)];
       const a = selectedIdx >= 0
         ? ((e.source === selectedIdx || e.target === selectedIdx) ? baseA : baseA * 0.12)
