@@ -2017,9 +2017,9 @@ const songMap = (() => {
     ctx.textBaseline = 'middle';
     for (const [genre, g] of Object.entries(gc)) {
       if (g.c < 3) continue;
-      const fontSize = Math.max(16, Math.min(36, g.c * 0.9));
+      const fontSize = Math.max(22, Math.min(64, g.c * 1.4));
       ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
-      ctx.fillStyle = 'rgba(255,255,255,0.09)';
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
       ctx.fillText(genre.toUpperCase(), g.sx / g.c, g.sy / g.c);
     }
 
