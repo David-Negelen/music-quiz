@@ -2121,7 +2121,7 @@ const songMap = (() => {
     canvas.height = H * dpr;
 
     buildGraph(songs);
-    const ticks = songs.length > 500 ? 200 : songs.length > 200 ? 250 : 300;
+    const ticks = songs.length > 500 ? 500 : songs.length > 200 ? 400 : 300;
     await simulate(canvas, ticks);
 
     // Fit all nodes into initial view
