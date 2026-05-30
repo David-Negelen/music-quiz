@@ -1846,20 +1846,35 @@ const songMap = (() => {
   }
 
   function buildGraph(songs) {
-    nodes = songs.map(s => ({
-      title: s.title, artist: s.artist, year: s.year, genre: s.genre,
-      streak: s.streak,
-      sr_due_title: s.sr_due_title, sr_due_artist: s.sr_due_artist, sr_due_year: s.sr_due_year,
-      attempts_title: s.attempts_title, attempts_artist: s.attempts_artist, attempts_year: s.attempts_year,
-      score_title: s.score_title, score_artist: s.score_artist, score_year: s.score_year,
-      r:     Math.min(13, 4 + (s.streak || 0) * 0.9),
-      color: TIER_COLORS[tier(s)],
-      t:     tier(s),
-      due:   isDue(s),
-      vx: 0, vy: 0,
-      x: W / 2 + Math.cos(Math.random() * Math.PI * 2) * Math.sqrt(Math.random()) * 350,
-      y: H / 2 + Math.sin(Math.random() * Math.PI * 2) * Math.sqrt(Math.random()) * 350,
-    }));
+    // Seed positions by genre so clustering is visible from the start
+    const genreCounts = {};
+    for (const s of songs) { if (s.genre) genreCounts[s.genre] = (genreCounts[s.genre] || 0) + 1; }
+    const genreKeys = Object.keys(genreCounts);
+    const genrePos = {};
+    genreKeys.forEach((g, i) => {
+      const angle = (i / genreKeys.length) * Math.PI * 2;
+      genrePos[g] = { x: W / 2 + Math.cos(angle) * 380, y: H / 2 + Math.sin(angle) * 380 };
+    });
+
+    nodes = songs.map(s => {
+      const gp = s.genre && genrePos[s.genre] ? genrePos[s.genre] : { x: W / 2, y: H / 2 };
+      const cr = Math.sqrt(genreCounts[s.genre] || 1) * 14;
+      const a = Math.random() * Math.PI * 2;
+      return {
+        title: s.title, artist: s.artist, year: s.year, genre: s.genre,
+        streak: s.streak,
+        sr_due_title: s.sr_due_title, sr_due_artist: s.sr_due_artist, sr_due_year: s.sr_due_year,
+        attempts_title: s.attempts_title, attempts_artist: s.attempts_artist, attempts_year: s.attempts_year,
+        score_title: s.score_title, score_artist: s.score_artist, score_year: s.score_year,
+        r:     Math.min(13, 4 + (s.streak || 0) * 0.9),
+        color: TIER_COLORS[tier(s)],
+        t:     tier(s),
+        due:   isDue(s),
+        vx: 0, vy: 0,
+        x: gp.x + Math.cos(a) * Math.sqrt(Math.random()) * cr,
+        y: gp.y + Math.sin(a) * Math.sqrt(Math.random()) * cr,
+      };
+    });
 
     const all = [];
     for (let i = 0; i < nodes.length; i++) {
@@ -1893,6 +1908,7 @@ const songMap = (() => {
   }
 
   function simulateTick(alpha) {
+    // Repulsion between all pairs
     for (let i = 0; i < nodes.length; i++) {
       const ni = nodes[i];
       for (let j = i + 1; j < nodes.length; j++) {
@@ -1900,22 +1916,13 @@ const songMap = (() => {
         const dx = nj.x - ni.x, dy = nj.y - ni.y;
         const d2 = Math.max(1, dx * dx + dy * dy);
         const d  = Math.sqrt(d2);
-        const f  = alpha * 3000 / d2;
+        const f  = alpha * 2500 / d2;
         const fx = dx / d * f, fy = dy / d * f;
         ni.vx -= fx; ni.vy -= fy;
         nj.vx += fx; nj.vy += fy;
       }
     }
-    for (const e of edges) {
-      const ni = nodes[e.source], nj = nodes[e.target];
-      const dx = nj.x - ni.x, dy = nj.y - ni.y;
-      const d  = Math.sqrt(dx * dx + dy * dy) || 1;
-      if (d > 220) continue;
-      const s  = (d - 60) * 0.07 * alpha * e.strength;
-      const fx = dx / d * s * 0.5, fy = dy / d * s * 0.5;
-      ni.vx += fx; ni.vy += fy;
-      nj.vx -= fx; nj.vy -= fy;
-    }
+    // Genre clustering — pulls same-genre nodes toward their centroid
     const gc = {};
     for (const n of nodes) {
       if (!n.genre) continue;
@@ -1925,12 +1932,18 @@ const songMap = (() => {
     for (const n of nodes) {
       const g = n.genre && gc[n.genre];
       if (g && g.c > 1) {
-        n.vx += (g.sx / g.c - n.x) * 0.012 * alpha;
-        n.vy += (g.sy / g.c - n.y) * 0.012 * alpha;
+        n.vx += (g.sx / g.c - n.x) * 0.018 * alpha;
+        n.vy += (g.sy / g.c - n.y) * 0.018 * alpha;
       }
     }
+    // Weak centering to keep graph roughly in view
     for (const n of nodes) {
-      n.vx *= 0.72; n.vy *= 0.72;
+      n.vx += (W / 2 - n.x) * 0.002 * alpha;
+      n.vy += (H / 2 - n.y) * 0.002 * alpha;
+    }
+    // Integrate
+    for (const n of nodes) {
+      n.vx *= 0.7; n.vy *= 0.7;
       n.x += n.vx;
       n.y += n.vy;
     }
@@ -2209,8 +2222,8 @@ const songMap = (() => {
       for (const n of nodes) {
         if (Math.abs(n.vx) > 0.01 || Math.abs(n.vy) > 0.01) {
           n.vx *= 0.75; n.vy *= 0.75;
-          n.x = Math.max(n.r + 4, Math.min(W - n.r - 4, n.x + n.vx));
-          n.y = Math.max(n.r + 4, Math.min(H - n.r - 4, n.y + n.vy));
+          n.x += n.vx;
+          n.y += n.vy;
         }
       }
       draw(canvas);
