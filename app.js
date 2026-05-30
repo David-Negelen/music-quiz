@@ -1866,7 +1866,7 @@ const songMap = (() => {
         sr_due_title: s.sr_due_title, sr_due_artist: s.sr_due_artist, sr_due_year: s.sr_due_year,
         attempts_title: s.attempts_title, attempts_artist: s.attempts_artist, attempts_year: s.attempts_year,
         score_title: s.score_title, score_artist: s.score_artist, score_year: s.score_year,
-        r:     Math.min(13, 4 + (s.streak || 0) * 0.9),
+        r:     Math.min(20, 4 + (s.streak || 0) * 1.6),
         color: TIER_COLORS[tier(s)],
         t:     tier(s),
         due:   isDue(s),
@@ -1882,10 +1882,9 @@ const songMap = (() => {
       for (let j = i + 1; j < nodes.length; j++) {
         const b = songs[j];
         let m = 0;
-        if (a.genre && b.genre && a.genre === b.genre)             m++;
+        if (a.genre && b.genre && a.genre === b.genre)               m += 2;
         if (a.year && b.year && Math.abs((a.year|0)-(b.year|0)) <= 3) m++;
-        if (nodes[i].t === nodes[j].t)                             m++;
-        if ((a.streak || 0) > 0 && (b.streak || 0) > 0)           m++;
+        if (a.artist && b.artist && a.artist === b.artist)            m += 3;
         if (m) all.push({ source: i, target: j, strength: m });
       }
     }
@@ -1893,7 +1892,7 @@ const songMap = (() => {
     const cnt = new Int32Array(nodes.length);
     edges = [];
     for (const e of all) {
-      if (cnt[e.source] < 3 && cnt[e.target] < 3) {
+      if (cnt[e.source] < 6 && cnt[e.target] < 6) {
         edges.push(e);
         cnt[e.source]++;
         cnt[e.target]++;
@@ -2006,38 +2005,19 @@ const songMap = (() => {
     ctx.translate(pan.x, pan.y);
     ctx.scale(zoom, zoom);
 
-    // Genre watermarks
-    const gc = {};
-    for (const n of nodes) {
-      if (!n.genre) continue;
-      const g = gc[n.genre] = gc[n.genre] || { sx: 0, sy: 0, c: 0 };
-      g.sx += n.x; g.sy += n.y; g.c++;
-    }
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (const [genre, g] of Object.entries(gc)) {
-      if (g.c < 3) continue;
-      const fontSize = Math.max(22, Math.min(64, g.c * 1.4));
-      ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
-      ctx.fillText(genre.toUpperCase(), g.sx / g.c, g.sy / g.c);
-    }
-
-    // Edges
-    ctx.lineWidth = 0.6;
-    for (const e of edges) {
-      const ni = nodes[e.source], nj = nodes[e.target];
-      const dx = nj.x - ni.x, dy = nj.y - ni.y;
-      if (dx * dx + dy * dy > 220 * 220) continue;
-      const baseA = EDGE_ALPHA[Math.min(e.strength, 4)];
-      const a = selectedIdx >= 0
-        ? ((e.source === selectedIdx || e.target === selectedIdx) ? baseA : baseA * 0.12)
-        : baseA;
-      ctx.strokeStyle = `rgba(180,190,255,${a})`;
-      ctx.beginPath();
-      ctx.moveTo(ni.x, ni.y);
-      ctx.lineTo(nj.x, nj.y);
-      ctx.stroke();
+    // Edges — only draw when a node is selected
+    if (selectedIdx >= 0) {
+      ctx.lineWidth = 1;
+      for (const e of edges) {
+        if (e.source !== selectedIdx && e.target !== selectedIdx) continue;
+        const ni = nodes[e.source], nj = nodes[e.target];
+        const a = Math.min(1, e.strength * 0.18);
+        ctx.strokeStyle = `rgba(180,190,255,${a})`;
+        ctx.beginPath();
+        ctx.moveTo(ni.x, ni.y);
+        ctx.lineTo(nj.x, nj.y);
+        ctx.stroke();
+      }
     }
 
     // Nodes
@@ -2077,6 +2057,27 @@ const songMap = (() => {
     }
 
     ctx.globalAlpha = 1;
+
+    // Genre labels drawn on top so dense clusters don't bury them
+    const gc = {};
+    for (const n of nodes) {
+      if (!n.genre) continue;
+      const g = gc[n.genre] = gc[n.genre] || { sx: 0, sy: 0, c: 0 };
+      g.sx += n.x; g.sy += n.y; g.c++;
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const [genre, g] of Object.entries(gc)) {
+      if (g.c < 3) continue;
+      const fontSize = Math.max(22, Math.min(64, g.c * 1.4));
+      ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillText(genre.toUpperCase(), g.sx / g.c, g.sy / g.c);
+    }
+    ctx.shadowBlur = 0;
+
     ctx.restore();
   }
 
