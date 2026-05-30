@@ -1908,7 +1908,7 @@ const songMap = (() => {
   }
 
   function simulateTick(alpha) {
-    // Repulsion between all pairs
+    // Repulsion: less between same-genre (let them stay close), more between different genres (push clusters apart)
     for (let i = 0; i < nodes.length; i++) {
       const ni = nodes[i];
       for (let j = i + 1; j < nodes.length; j++) {
@@ -1916,7 +1916,8 @@ const songMap = (() => {
         const dx = nj.x - ni.x, dy = nj.y - ni.y;
         const d2 = Math.max(1, dx * dx + dy * dy);
         const d  = Math.sqrt(d2);
-        const f  = alpha * 2500 / d2;
+        const sameGenre = ni.genre && nj.genre && ni.genre === nj.genre;
+        const f  = alpha * (sameGenre ? 500 : 4000) / d2;
         const fx = dx / d * f, fy = dy / d * f;
         ni.vx -= fx; ni.vy -= fy;
         nj.vx += fx; nj.vy += fy;
@@ -1932,8 +1933,8 @@ const songMap = (() => {
     for (const n of nodes) {
       const g = n.genre && gc[n.genre];
       if (g && g.c > 1) {
-        n.vx += (g.sx / g.c - n.x) * 0.018 * alpha;
-        n.vy += (g.sy / g.c - n.y) * 0.018 * alpha;
+        n.vx += (g.sx / g.c - n.x) * 0.05 * alpha;
+        n.vy += (g.sy / g.c - n.y) * 0.05 * alpha;
       }
     }
     // Weak centering to keep graph roughly in view
