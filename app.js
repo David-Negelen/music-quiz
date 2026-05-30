@@ -1930,10 +1930,11 @@ const songMap = (() => {
         n.vy += (g.sy / g.c - n.y) * 0.05 * alpha;
       }
     }
-    // Weak centering to keep graph roughly in view
+    // Centering — stronger for nodes in small or no genre (no cluster to anchor them)
     for (const n of nodes) {
-      n.vx += (W / 2 - n.x) * 0.002 * alpha;
-      n.vy += (H / 2 - n.y) * 0.002 * alpha;
+      const pull = (n.genre && gc[n.genre] && gc[n.genre].c >= 5) ? 0.002 : 0.012;
+      n.vx += (W / 2 - n.x) * pull * alpha;
+      n.vy += (H / 2 - n.y) * pull * alpha;
     }
     // Integrate
     for (const n of nodes) {
