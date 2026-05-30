@@ -1901,7 +1901,7 @@ const songMap = (() => {
   }
 
   function simulateTick(alpha) {
-    // Repulsion: less between same-genre (let them stay close), more between different genres (push clusters apart)
+    // Uniform repulsion — clusters separate naturally via genre attraction, not differential repulsion
     for (let i = 0; i < nodes.length; i++) {
       const ni = nodes[i];
       for (let j = i + 1; j < nodes.length; j++) {
@@ -1909,14 +1909,13 @@ const songMap = (() => {
         const dx = nj.x - ni.x, dy = nj.y - ni.y;
         const d2 = Math.max(1, dx * dx + dy * dy);
         const d  = Math.sqrt(d2);
-        const sameGenre = ni.genre && nj.genre && ni.genre === nj.genre;
-        const f  = alpha * (sameGenre ? 500 : 4000) / d2;
+        const f  = alpha * 1800 / d2;
         const fx = dx / d * f, fy = dy / d * f;
         ni.vx -= fx; ni.vy -= fy;
         nj.vx += fx; nj.vy += fy;
       }
     }
-    // Genre clustering — pulls same-genre nodes toward their centroid
+    // Genre clustering — attraction keeps same-genre nodes together
     const gc = {};
     for (const n of nodes) {
       if (!n.genre) continue;
@@ -1926,13 +1925,13 @@ const songMap = (() => {
     for (const n of nodes) {
       const g = n.genre && gc[n.genre];
       if (g && g.c > 1) {
-        n.vx += (g.sx / g.c - n.x) * 0.05 * alpha;
-        n.vy += (g.sy / g.c - n.y) * 0.05 * alpha;
+        n.vx += (g.sx / g.c - n.x) * 0.08 * alpha;
+        n.vy += (g.sy / g.c - n.y) * 0.08 * alpha;
       }
     }
     // Centering — stronger for nodes in small or no genre (no cluster to anchor them)
     for (const n of nodes) {
-      const pull = (n.genre && gc[n.genre] && gc[n.genre].c >= 5) ? 0.002 : 0.012;
+      const pull = (n.genre && gc[n.genre] && gc[n.genre].c >= 5) ? 0.003 : 0.012;
       n.vx += (W / 2 - n.x) * pull * alpha;
       n.vy += (H / 2 - n.y) * pull * alpha;
     }
