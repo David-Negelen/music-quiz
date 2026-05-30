@@ -1876,26 +1876,20 @@ const songMap = (() => {
       };
     });
 
-    const all = [];
-    for (let i = 0; i < nodes.length; i++) {
-      const a = songs[i];
-      for (let j = i + 1; j < nodes.length; j++) {
-        const b = songs[j];
-        let m = 0;
-        if (a.genre && b.genre && a.genre === b.genre)               m += 2;
-        if (a.year && b.year && Math.abs((a.year|0)-(b.year|0)) <= 3) m++;
-        if (a.artist && b.artist && a.artist === b.artist)            m += 3;
-        if (m) all.push({ source: i, target: j, strength: m });
-      }
+    // Connect all songs from the same artist
+    const artistMap = {};
+    for (let i = 0; i < songs.length; i++) {
+      const a = songs[i].artist;
+      if (!a) continue;
+      if (!artistMap[a]) artistMap[a] = [];
+      artistMap[a].push(i);
     }
-    all.sort((a, b) => b.strength - a.strength);
-    const cnt = new Int32Array(nodes.length);
     edges = [];
-    for (const e of all) {
-      if (cnt[e.source] < 6 && cnt[e.target] < 6) {
-        edges.push(e);
-        cnt[e.source]++;
-        cnt[e.target]++;
+    for (const indices of Object.values(artistMap)) {
+      for (let a = 0; a < indices.length; a++) {
+        for (let b = a + 1; b < indices.length; b++) {
+          edges.push({ source: indices[a], target: indices[b], strength: 1 });
+        }
       }
     }
 
@@ -2011,7 +2005,7 @@ const songMap = (() => {
       for (const e of edges) {
         if (e.source !== selectedIdx && e.target !== selectedIdx) continue;
         const ni = nodes[e.source], nj = nodes[e.target];
-        const a = Math.min(1, e.strength * 0.18);
+        const a = 0.5;
         ctx.strokeStyle = `rgba(180,190,255,${a})`;
         ctx.beginPath();
         ctx.moveTo(ni.x, ni.y);
