@@ -1903,7 +1903,7 @@ const songMap = (() => {
         ni.vx -= ux * rep; ni.vy -= uy * rep;
         nj.vx += ux * rep; nj.vy += uy * rep;
         // Physical collision — nodes can't overlap, creates organic spacing
-        const minD = ni.r + nj.r + 3;
+        const minD = ni.r + nj.r + 1;
         if (d < minD) {
           const push = (minD - d) * 0.5;
           ni.vx -= ux * push; ni.vy -= uy * push;
@@ -2100,7 +2100,8 @@ const songMap = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const [genre, g] of Object.entries(gc)) {
-      if (g.c < 3) continue;
+      const minLabelCount = zoom < 1.5 ? 5 : 3;
+      if (g.c < minLabelCount) continue;
       const fontSize = Math.min(52, 12 + Math.sqrt(g.c) * 2.5);
       ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
       ctx.shadowColor = 'rgba(0,0,0,0.85)';
