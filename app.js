@@ -2104,9 +2104,9 @@ const songMap = (() => {
       if (g.c < minLabelCount) continue;
       const fontSize = Math.min(52, 12 + Math.sqrt(g.c) * 2.5);
       ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur = 10;
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
       ctx.fillText(genre.toUpperCase(), g.sx / g.c, g.sy / g.c);
     }
     ctx.shadowBlur = 0;
