@@ -1857,8 +1857,8 @@ const songMap = (() => {
       t:     tier(s),
       due:   isDue(s),
       vx: 0, vy: 0,
-      x: W / 2 + (Math.random() * 2 - 1),
-      y: H / 2 + (Math.random() * 2 - 1),
+      x: W / 2 + (Math.random() - 0.5) * W * 0.6,
+      y: H / 2 + (Math.random() - 0.5) * H * 0.6,
     }));
 
     // Connect all songs from the same artist
