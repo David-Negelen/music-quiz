@@ -2069,9 +2069,9 @@ const songMap = (() => {
         ctx.stroke();
       }
 
-      const haloR = n.r + (hov ? 8 : 5);
+      const haloR = n.r + (hov ? 6 : 3);
       const grad  = ctx.createRadialGradient(n.x, n.y, n.r * 0.3, n.x, n.y, haloR);
-      grad.addColorStop(0, n.color + (hov ? 'cc' : '44'));
+      grad.addColorStop(0, n.color + (hov ? '88' : '22'));
       grad.addColorStop(1, n.color + '00');
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -2178,6 +2178,13 @@ const songMap = (() => {
     const ticks = songs.length > 500 ? 1000 : songs.length > 200 ? 600 : 400;
     await simulate(canvas, ticks);
 
+    // Clamp escaped nodes before computing fit-view bounding box
+    const CLAMP = 40;
+    for (const n of nodes) {
+      n.x = Math.max(n.r + CLAMP, Math.min(W - n.r - CLAMP, n.x));
+      n.y = Math.max(n.r + CLAMP, Math.min(H - n.r - CLAMP, n.y));
+    }
+
     // Fit all nodes into initial view
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const n of nodes) {
@@ -2272,8 +2279,8 @@ const songMap = (() => {
       for (const n of nodes) {
         if (Math.abs(n.vx) > 0.01 || Math.abs(n.vy) > 0.01) {
           n.vx *= 0.75; n.vy *= 0.75;
-          n.x += n.vx;
-          n.y += n.vy;
+          n.x = Math.max(n.r + 40, Math.min(W - n.r - 40, n.x + n.vx));
+          n.y = Math.max(n.r + 40, Math.min(H - n.r - 40, n.y + n.vy));
         }
       }
       draw(canvas);
