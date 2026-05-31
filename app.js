@@ -2178,13 +2178,6 @@ const songMap = (() => {
     const ticks = songs.length > 500 ? 1000 : songs.length > 200 ? 600 : 400;
     await simulate(canvas, ticks);
 
-    // Clamp escaped nodes before computing fit-view bounding box
-    const CLAMP = 40;
-    for (const n of nodes) {
-      n.x = Math.max(n.r + CLAMP, Math.min(W - n.r - CLAMP, n.x));
-      n.y = Math.max(n.r + CLAMP, Math.min(H - n.r - CLAMP, n.y));
-    }
-
     // Fit all nodes into initial view
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const n of nodes) {
@@ -2279,8 +2272,8 @@ const songMap = (() => {
       for (const n of nodes) {
         if (Math.abs(n.vx) > 0.01 || Math.abs(n.vy) > 0.01) {
           n.vx *= 0.75; n.vy *= 0.75;
-          n.x = Math.max(n.r + 40, Math.min(W - n.r - 40, n.x + n.vx));
-          n.y = Math.max(n.r + 40, Math.min(H - n.r - 40, n.y + n.vy));
+          n.x += n.vx;
+          n.y += n.vy;
         }
       }
       draw(canvas);
