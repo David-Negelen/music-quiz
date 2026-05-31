@@ -1857,17 +1857,20 @@ const songMap = (() => {
       t:     tier(s),
       due:   isDue(s),
       vx: 0, vy: 0,
-      x: W / 2 + (Math.random() - 0.5) * W * 0.6,
-      y: H / 2 + (Math.random() - 0.5) * H * 0.6,
+      x: W / 2 + (Math.random() - 0.5) * 800,
+      y: H / 2 + (Math.random() - 0.5) * 800,
     }));
 
-    // Connect all songs from the same artist
+    // Connect all songs from the same artist; tag nodes with artist song count
     const artistMap = {};
     for (let i = 0; i < songs.length; i++) {
       const a = songs[i].artist;
       if (!a) continue;
       if (!artistMap[a]) artistMap[a] = [];
       artistMap[a].push(i);
+    }
+    for (const [artist, indices] of Object.entries(artistMap)) {
+      for (const idx of indices) nodes[idx].artistCount = indices.length;
     }
     edges = [];
     for (const indices of Object.values(artistMap)) {
@@ -1894,7 +1897,7 @@ const songMap = (() => {
         const dx = nj.x - ni.x, dy = nj.y - ni.y;
         const d2 = Math.max(1, dx * dx + dy * dy);
         const d  = Math.sqrt(d2);
-        const f  = alpha * 1800 / d2;
+        const f  = alpha * 5000 / d2;
         const fx = dx / d * f, fy = dy / d * f;
         ni.vx -= fx; ni.vy -= fy;
         nj.vx += fx; nj.vy += fy;
@@ -1910,8 +1913,8 @@ const songMap = (() => {
     for (const n of nodes) {
       const g = n.genre && gc[n.genre];
       if (g && g.c > 1) {
-        n.vx += (g.sx / g.c - n.x) * 0.025 * alpha;
-        n.vy += (g.sy / g.c - n.y) * 0.025 * alpha;
+        n.vx += (g.sx / g.c - n.x) * 0.008 * alpha;
+        n.vy += (g.sy / g.c - n.y) * 0.008 * alpha;
       }
     }
     // Artist cohesion — sub-cluster same-artist nodes within their genre
@@ -1931,8 +1934,8 @@ const songMap = (() => {
         const dx = ax - gx, dy = ay - gy;
         if (dx * dx + dy * dy > 14400) continue;
       }
-      n.vx += (ax - n.x) * 0.012 * alpha;
-      n.vy += (ay - n.y) * 0.012 * alpha;
+      n.vx += (ax - n.x) * 0.004 * alpha;
+      n.vy += (ay - n.y) * 0.004 * alpha;
     }
     // Centering — stronger for nodes in small or no genre (no cluster to anchor them)
     for (const n of nodes) {
@@ -2004,15 +2007,19 @@ const songMap = (() => {
     ctx.translate(pan.x, pan.y);
     ctx.scale(zoom, zoom);
 
-    // Passive artist edges — faint always-on sub-structure hint
-    ctx.lineWidth = 0.5;
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    for (const e of edges) {
-      const ni = nodes[e.source], nj = nodes[e.target];
-      ctx.beginPath();
-      ctx.moveTo(ni.x, ni.y);
-      ctx.lineTo(nj.x, nj.y);
-      ctx.stroke();
+    // Passive artist edges — faint sub-structure; only artists with ≥3 songs, fades with zoom
+    const passiveAlpha = Math.max(0, Math.min(1, (zoom - 0.5) / 1.5)) * 0.07;
+    if (passiveAlpha > 0) {
+      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = `rgba(255,255,255,${passiveAlpha})`;
+      for (const e of edges) {
+        if ((nodes[e.source].artistCount || 0) < 3) continue;
+        const ni = nodes[e.source], nj = nodes[e.target];
+        ctx.beginPath();
+        ctx.moveTo(ni.x, ni.y);
+        ctx.lineTo(nj.x, nj.y);
+        ctx.stroke();
+      }
     }
 
     // Selected-node edges — bright on click
@@ -2040,9 +2047,9 @@ const songMap = (() => {
 
       if (n.due && !dimmed) {
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r + 3 + pulse * 4, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,255,255,${0.3 * pulse + 0.04})`;
-        ctx.lineWidth = 1.2;
+        ctx.arc(n.x, n.y, n.r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${0.6 * pulse})`;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 
@@ -2078,7 +2085,7 @@ const songMap = (() => {
     ctx.textBaseline = 'middle';
     for (const [genre, g] of Object.entries(gc)) {
       if (g.c < 3) continue;
-      const fontSize = Math.max(22, Math.min(64, g.c * 1.4));
+      const fontSize = Math.min(52, 12 + Math.sqrt(g.c) * 2.5);
       ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
       ctx.shadowColor = 'rgba(0,0,0,0.85)';
       ctx.shadowBlur = 10;
@@ -2090,9 +2097,13 @@ const songMap = (() => {
     ctx.restore();
   }
 
-  function fieldDot(score, attempts) {
-    if (!attempts) return 'unheard';
-    return (score >= 1 && score / attempts >= 0.5) ? 'known' : 'wrong';
+  function fieldAccColor(score, attempts) {
+    if (!attempts) return '#555';
+    const r = score / attempts;
+    if (r >= 0.8) return '#4caf50';
+    if (r >= 0.5) return '#ffeb3b';
+    if (r >= 0.2) return '#ff9800';
+    return '#f44336';
   }
 
   function showTooltip(tooltipEl, canvas, i, clientX, clientY) {
@@ -2104,20 +2115,16 @@ const songMap = (() => {
     const due = ['title', 'artist', 'year']
       .filter(f => { const d = n[`sr_due_${f}`]; return d && d <= today; })
       .map(f => dueLabels[f]);
-    const fTitle  = fieldDot(n.score_title,  n.attempts_title);
-    const fArtist = fieldDot(n.score_artist, n.attempts_artist);
-    const fYear   = fieldDot(n.score_year,   n.attempts_year);
+    const cT = fieldAccColor(n.score_title,  n.attempts_title);
+    const cA = fieldAccColor(n.score_artist, n.attempts_artist);
+    const cY = fieldAccColor(n.score_year,   n.attempts_year);
+    const dot = (c, lbl) => `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px">` +
+      `<span style="width:7px;height:7px;border-radius:2px;background:${c};display:inline-block"></span>` +
+      `<span style="font-size:10px;color:var(--text-3)">${lbl}</span></span>`;
     tooltipEl.innerHTML =
       `<div class="smt-title">${esc(n.title)}</div>` +
       `<div class="smt-artist">${esc(n.artist)}</div>` +
-      `<div class="smt-row">` +
-        `<span class="smt-label">Titel · Künstler · Jahr</span>` +
-        `<span class="mastery-dots" style="margin-left:8px">` +
-          `<span class="mastery-dot-field mastery-field-${fTitle}"  title="Titel"></span>` +
-          `<span class="mastery-dot-field mastery-field-${fArtist}" title="Künstler"></span>` +
-          `<span class="mastery-dot-field mastery-field-${fYear}"   title="Jahr"></span>` +
-        `</span>` +
-      `</div>` +
+      `<div style="display:flex;align-items:center;margin-top:5px">${dot(cT,'T')}${dot(cA,'K')}${dot(cY,'J')}</div>` +
       `<div class="smt-row"><span class="smt-label">Streak</span><span class="smt-val">${n.streak || 0}</span></div>` +
       (due.length ? `<div class="smt-due">Fällig: ${due.join(', ')}</div>` : '');
     tooltipEl.style.display = 'block';
