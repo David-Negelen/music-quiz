@@ -2069,9 +2069,9 @@ const songMap = (() => {
         ctx.stroke();
       }
 
-      const haloR = n.r + (hov ? 6 : 3);
+      const haloR = n.r + (hov ? 5 : 2);
       const grad  = ctx.createRadialGradient(n.x, n.y, n.r * 0.3, n.x, n.y, haloR);
-      grad.addColorStop(0, n.color + (hov ? '88' : '22'));
+      grad.addColorStop(0, n.color + (hov ? '55' : '11'));
       grad.addColorStop(1, n.color + '00');
       ctx.fillStyle = grad;
       ctx.beginPath();
