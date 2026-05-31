@@ -1914,6 +1914,26 @@ const songMap = (() => {
         n.vy += (g.sy / g.c - n.y) * 0.025 * alpha;
       }
     }
+    // Artist cohesion — sub-cluster same-artist nodes within their genre
+    const ac = {};
+    for (const n of nodes) {
+      if (!n.artist) continue;
+      const a = ac[n.artist] = ac[n.artist] || { sx: 0, sy: 0, c: 0 };
+      a.sx += n.x; a.sy += n.y; a.c++;
+    }
+    for (const n of nodes) {
+      const a = n.artist && ac[n.artist];
+      if (!a || a.c < 2) continue;
+      const ax = a.sx / a.c, ay = a.sy / a.c;
+      // Skip if artist centroid has drifted >120px from genre centroid (multi-genre artist)
+      if (n.genre && gc[n.genre]) {
+        const gx = gc[n.genre].sx / gc[n.genre].c, gy = gc[n.genre].sy / gc[n.genre].c;
+        const dx = ax - gx, dy = ay - gy;
+        if (dx * dx + dy * dy > 14400) continue;
+      }
+      n.vx += (ax - n.x) * 0.012 * alpha;
+      n.vy += (ay - n.y) * 0.012 * alpha;
+    }
     // Centering — stronger for nodes in small or no genre (no cluster to anchor them)
     for (const n of nodes) {
       const pull = (n.genre && gc[n.genre] && gc[n.genre].c >= 5) ? 0.003 : 0.012;
@@ -1984,14 +2004,24 @@ const songMap = (() => {
     ctx.translate(pan.x, pan.y);
     ctx.scale(zoom, zoom);
 
-    // Edges — only draw when a node is selected
+    // Passive artist edges — faint always-on sub-structure hint
+    ctx.lineWidth = 0.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    for (const e of edges) {
+      const ni = nodes[e.source], nj = nodes[e.target];
+      ctx.beginPath();
+      ctx.moveTo(ni.x, ni.y);
+      ctx.lineTo(nj.x, nj.y);
+      ctx.stroke();
+    }
+
+    // Selected-node edges — bright on click
     if (selectedIdx >= 0) {
       ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(180,190,255,0.5)';
       for (const e of edges) {
         if (e.source !== selectedIdx && e.target !== selectedIdx) continue;
         const ni = nodes[e.source], nj = nodes[e.target];
-        const a = 0.5;
-        ctx.strokeStyle = `rgba(180,190,255,${a})`;
         ctx.beginPath();
         ctx.moveTo(ni.x, ni.y);
         ctx.lineTo(nj.x, nj.y);
