@@ -1846,35 +1846,20 @@ const songMap = (() => {
   }
 
   function buildGraph(songs) {
-    // Seed positions by genre so clustering is visible from the start
-    const genreCounts = {};
-    for (const s of songs) { if (s.genre) genreCounts[s.genre] = (genreCounts[s.genre] || 0) + 1; }
-    const genreKeys = Object.keys(genreCounts);
-    const genrePos = {};
-    genreKeys.forEach((g, i) => {
-      const angle = (i / genreKeys.length) * Math.PI * 2;
-      genrePos[g] = { x: W / 2 + Math.cos(angle) * 380, y: H / 2 + Math.sin(angle) * 380 };
-    });
-
-    nodes = songs.map(s => {
-      const gp = s.genre && genrePos[s.genre] ? genrePos[s.genre] : { x: W / 2, y: H / 2 };
-      const cr = Math.sqrt(genreCounts[s.genre] || 1) * 14;
-      const a = Math.random() * Math.PI * 2;
-      return {
-        title: s.title, artist: s.artist, year: s.year, genre: s.genre,
-        streak: s.streak,
-        sr_due_title: s.sr_due_title, sr_due_artist: s.sr_due_artist, sr_due_year: s.sr_due_year,
-        attempts_title: s.attempts_title, attempts_artist: s.attempts_artist, attempts_year: s.attempts_year,
-        score_title: s.score_title, score_artist: s.score_artist, score_year: s.score_year,
-        r:     Math.min(20, 4 + (s.streak || 0) * 1.6),
-        color: TIER_COLORS[tier(s)],
-        t:     tier(s),
-        due:   isDue(s),
-        vx: 0, vy: 0,
-        x: gp.x + Math.cos(a) * Math.sqrt(Math.random()) * cr,
-        y: gp.y + Math.sin(a) * Math.sqrt(Math.random()) * cr,
-      };
-    });
+    nodes = songs.map(s => ({
+      title: s.title, artist: s.artist, year: s.year, genre: s.genre,
+      streak: s.streak,
+      sr_due_title: s.sr_due_title, sr_due_artist: s.sr_due_artist, sr_due_year: s.sr_due_year,
+      attempts_title: s.attempts_title, attempts_artist: s.attempts_artist, attempts_year: s.attempts_year,
+      score_title: s.score_title, score_artist: s.score_artist, score_year: s.score_year,
+      r:     Math.min(20, 4 + (s.streak || 0) * 1.6),
+      color: TIER_COLORS[tier(s)],
+      t:     tier(s),
+      due:   isDue(s),
+      vx: 0, vy: 0,
+      x: W / 2 + (Math.random() * 2 - 1),
+      y: H / 2 + (Math.random() * 2 - 1),
+    }));
 
     // Connect all songs from the same artist
     const artistMap = {};
@@ -2075,6 +2060,11 @@ const songMap = (() => {
     ctx.restore();
   }
 
+  function fieldDot(score, attempts) {
+    if (!attempts) return 'unheard';
+    return (score >= 1 && score / attempts >= 0.5) ? 'known' : 'wrong';
+  }
+
   function showTooltip(tooltipEl, canvas, i, clientX, clientY) {
     const n = nodes[i];
     const pct = masteryPct(n);
@@ -2084,10 +2074,20 @@ const songMap = (() => {
     const due = ['title', 'artist', 'year']
       .filter(f => { const d = n[`sr_due_${f}`]; return d && d <= today; })
       .map(f => dueLabels[f]);
+    const fTitle  = fieldDot(n.score_title,  n.attempts_title);
+    const fArtist = fieldDot(n.score_artist, n.attempts_artist);
+    const fYear   = fieldDot(n.score_year,   n.attempts_year);
     tooltipEl.innerHTML =
       `<div class="smt-title">${esc(n.title)}</div>` +
       `<div class="smt-artist">${esc(n.artist)}</div>` +
-      `<div class="smt-row"><span class="smt-label">Beherrschung</span><span class="smt-val" style="color:${n.color}">${pctStr}</span></div>` +
+      `<div class="smt-row">` +
+        `<span class="smt-label">Titel · Künstler · Jahr</span>` +
+        `<span class="mastery-dots" style="margin-left:8px">` +
+          `<span class="mastery-dot-field mastery-field-${fTitle}"  title="Titel"></span>` +
+          `<span class="mastery-dot-field mastery-field-${fArtist}" title="Künstler"></span>` +
+          `<span class="mastery-dot-field mastery-field-${fYear}"   title="Jahr"></span>` +
+        `</span>` +
+      `</div>` +
       `<div class="smt-row"><span class="smt-label">Streak</span><span class="smt-val">${n.streak || 0}</span></div>` +
       (due.length ? `<div class="smt-due">Fällig: ${due.join(', ')}</div>` : '');
     tooltipEl.style.display = 'block';
