@@ -1889,21 +1889,29 @@ const songMap = (() => {
   }
 
   function simulateTick(alpha) {
-    // Uniform repulsion — clusters separate naturally via genre attraction, not differential repulsion
+    // Repulsion + collision in one O(n²) pass
     for (let i = 0; i < nodes.length; i++) {
       const ni = nodes[i];
       for (let j = i + 1; j < nodes.length; j++) {
         const nj = nodes[j];
         const dx = nj.x - ni.x, dy = nj.y - ni.y;
-        const d2 = Math.max(1, dx * dx + dy * dy);
+        const d2 = Math.max(0.01, dx * dx + dy * dy);
         const d  = Math.sqrt(d2);
-        const f  = alpha * 5000 / d2;
-        const fx = dx / d * f, fy = dy / d * f;
-        ni.vx -= fx; ni.vy -= fy;
-        nj.vx += fx; nj.vy += fy;
+        const ux = dx / d, uy = dy / d;
+        // Weak global repulsion
+        const rep = alpha * 120 / d2;
+        ni.vx -= ux * rep; ni.vy -= uy * rep;
+        nj.vx += ux * rep; nj.vy += uy * rep;
+        // Physical collision — nodes can't overlap, creates organic spacing
+        const minD = ni.r + nj.r + 3;
+        if (d < minD) {
+          const push = (minD - d) * 0.5;
+          ni.vx -= ux * push; ni.vy -= uy * push;
+          nj.vx += ux * push; nj.vy += uy * push;
+        }
       }
     }
-    // Genre clustering — attraction keeps same-genre nodes together
+    // Genre clustering
     const gc = {};
     for (const n of nodes) {
       if (!n.genre) continue;
@@ -1913,11 +1921,11 @@ const songMap = (() => {
     for (const n of nodes) {
       const g = n.genre && gc[n.genre];
       if (g && g.c > 1) {
-        n.vx += (g.sx / g.c - n.x) * 0.008 * alpha;
-        n.vy += (g.sy / g.c - n.y) * 0.008 * alpha;
+        n.vx += (g.sx / g.c - n.x) * 0.12 * alpha;
+        n.vy += (g.sy / g.c - n.y) * 0.12 * alpha;
       }
     }
-    // Artist cohesion — sub-cluster same-artist nodes within their genre
+    // Artist cohesion — sub-cluster within genre (capped at 120px from genre centroid)
     const ac = {};
     for (const n of nodes) {
       if (!n.artist) continue;
@@ -1928,24 +1936,32 @@ const songMap = (() => {
       const a = n.artist && ac[n.artist];
       if (!a || a.c < 2) continue;
       const ax = a.sx / a.c, ay = a.sy / a.c;
-      // Skip if artist centroid has drifted >120px from genre centroid (multi-genre artist)
       if (n.genre && gc[n.genre]) {
         const gx = gc[n.genre].sx / gc[n.genre].c, gy = gc[n.genre].sy / gc[n.genre].c;
         const dx = ax - gx, dy = ay - gy;
         if (dx * dx + dy * dy > 14400) continue;
       }
-      n.vx += (ax - n.x) * 0.004 * alpha;
-      n.vy += (ay - n.y) * 0.004 * alpha;
+      n.vx += (ax - n.x) * 0.06 * alpha;
+      n.vy += (ay - n.y) * 0.06 * alpha;
     }
-    // Centering — stronger for nodes in small or no genre (no cluster to anchor them)
+    // Link spring — pull same-artist edges toward distance 30
+    for (const e of edges) {
+      const ni = nodes[e.source], nj = nodes[e.target];
+      const dx = nj.x - ni.x, dy = nj.y - ni.y;
+      const d  = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f  = (d - 30) / d * 0.1 * alpha;
+      ni.vx += dx * f; ni.vy += dy * f;
+      nj.vx -= dx * f; nj.vy -= dy * f;
+    }
+    // Centering
     for (const n of nodes) {
       const pull = (n.genre && gc[n.genre] && gc[n.genre].c >= 5) ? 0.003 : 0.012;
       n.vx += (W / 2 - n.x) * pull * alpha;
       n.vy += (H / 2 - n.y) * pull * alpha;
     }
-    // Integrate
+    // Integrate — velocityDecay 0.4 → retain 0.6
     for (const n of nodes) {
-      n.vx *= 0.7; n.vy *= 0.7;
+      n.vx *= 0.6; n.vy *= 0.6;
       n.x += n.vx;
       n.y += n.vy;
     }
