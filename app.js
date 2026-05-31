@@ -1925,8 +1925,8 @@ const songMap = (() => {
     for (const n of nodes) {
       const g = n.genre && gc[n.genre];
       if (g && g.c > 1) {
-        n.vx += (g.sx / g.c - n.x) * 0.08 * alpha;
-        n.vy += (g.sy / g.c - n.y) * 0.08 * alpha;
+        n.vx += (g.sx / g.c - n.x) * 0.025 * alpha;
+        n.vy += (g.sy / g.c - n.y) * 0.025 * alpha;
       }
     }
     // Centering — stronger for nodes in small or no genre (no cluster to anchor them)
