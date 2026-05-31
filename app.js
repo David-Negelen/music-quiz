@@ -2061,14 +2061,6 @@ const songMap = (() => {
       const dimmed = selectedIdx >= 0 && !sel && !hov && !neighborSets[selectedIdx].has(i);
       ctx.globalAlpha = dimmed ? 0.18 : 1;
 
-      if (n.due && !dimmed) {
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,255,255,${0.25 * pulse})`;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
-
       const haloR = n.r + (hov ? 5 : 2);
       const grad  = ctx.createRadialGradient(n.x, n.y, n.r * 0.3, n.x, n.y, haloR);
       grad.addColorStop(0, n.color + (hov ? '55' : '11'));
