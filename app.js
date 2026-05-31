@@ -2064,7 +2064,7 @@ const songMap = (() => {
       if (n.due && !dimmed) {
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,255,255,${0.6 * pulse})`;
+        ctx.strokeStyle = `rgba(255,255,255,${0.25 * pulse})`;
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
